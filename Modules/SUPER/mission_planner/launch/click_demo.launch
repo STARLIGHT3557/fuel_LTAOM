@@ -1,0 +1,36 @@
+<launch>
+
+        <!-- <node pkg="perfect_drone_sim" type="perfect_drone" name="perfect_drone" output="log"> -->
+            <!--     1. use absolute path -->
+            <!--         <param name="config_path" value="" type="string"></param> -->
+            <!--     2. use file name in super_planner/config/... -->
+                    <!-- <param name="config_name" value="click.yaml" type="string"></param> -->
+        <!-- </node> -->
+
+    <!--     click_demo_high_speed.launch -->
+    <arg name="yaw_init" default="0.0"/>
+    <arg name="uav_id" default="1"/>
+    <node pkg="ego_planner" name="uav$(arg uav_id)_traj_server_for_prometheus" type="traj_server_for_prometheus_super" output="screen">
+        <param name="uav_id" value="$(arg uav_id)"/>
+        <!-- control_flag = 0 trajectory position and velocity control 
+        control_flag = 1 position tracking mode 
+        control_flag = 2 trajectory_attitude mode, attitude tracking in px4 controller -->
+        <param name="control_flag" value="2"/>  
+        <param name="traj_server/time_forward" value="1.0"/>
+        <param name="traj_server/last_yaw" value="$(arg yaw_init)"/>
+    </node>
+
+    <node pkg="super_planner" name="fsm_node" type="fsm_node" output="screen">
+<!--     1. use absolute path -->
+<!--         <param name="config_path" value="" type="string"></param> -->
+<!--     2. use file name in super_planner/config/... -->
+        <param name="config_name" value="click_smooth_ros1.yaml" type="string"></param>
+    </node>
+
+
+        <!-- <node pkg="rviz" type="rviz" name="top_down" args="-d $(find perfect_drone_sim)/rviz/top_down.rviz" output="log"/> -->
+        <!-- <node pkg="rviz" type="rviz" name="fpv" args="-d $(find perfect_drone_sim)/rviz/fpv.rviz" output="log"/> -->
+
+
+
+</launch>
