@@ -18,6 +18,7 @@
 // #include <livox_laser_simulation/CustomMsg.h>
 #include <prometheus_msgs/LivoxCustomMsg.h>
 #include <limits>
+#include <cmath>
 #include "livox_laser_simulation/csv_reader.hpp"
 #include "livox_laser_simulation/livox_ode_multiray_shape.h"
 #include "livox_laser_simulation/livox_point_xyzrtl.h"
@@ -49,7 +50,7 @@ void convertDataToRotateInfo(const std::vector<std::vector<double>> &datas, std:
 
 void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr sdf) {
     std::vector<std::vector<double>> datas;
-    std::string file_name = "/home/ubt/prometheus_px4/Tools/sitl_gazebo/models/MID360/scan_mode/mid360.csv";   // :chasing
+    std::string file_name = "/home/ubuntu/prometheus_px4/Tools/sitl_gazebo/models/MID360/scan_mode/mid360.csv";   // :chasing
     /*std::string file_name = sdf->Get<std::string>("csv_file_name");
 
     std::string filePath(__FILE__);
@@ -124,6 +125,16 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     }
 
     visualize = sdfPtr->Get<bool>("visualize");
+    // Optional simulation-only mapping stream. Preserve no-hit directions as
+    // max-range endpoints; the normal LiDAR stream keeps its original semantics.
+    if (publishPointCloudType == SENSOR_MSG_POINT_CLOUD2_POINTXYZ &&
+        sdfPtr->HasElement("mapping_topic")) {
+        const auto mapping_topic = sdfPtr->Get<std::string>("mapping_topic");
+        if (!mapping_topic.empty()) {
+            rosMappingPub = rosNode->advertise<sensor_msgs::PointCloud2>(mapping_topic, 5);
+            ROS_INFO_STREAM("mapping ray topic: " << mapping_topic);
+        }
+    }
 
     rayShape->RayShapes().reserve(samplesStep / downSample);
     rayShape->Load(sdfPtr);
@@ -413,6 +424,9 @@ void LivoxPointsPlugin::PublishPointCloud2XYZ(std::vector<std::pair<int, AviaRot
 
     pcl::PointCloud<pcl::PointXYZ> pc;
     pc.points.resize(points_pair.size());
+    pcl::PointCloud<pcl::PointXYZ> mapping_pc;
+    if (rosMappingPub) mapping_pc.points.resize(points_pair.size());
+    int mapping_count = 0;
     ros::Time timestamp = ros::Time::now();
     int pt_count = 0;
 #pragma omp parallel for
@@ -427,7 +441,12 @@ void LivoxPointsPlugin::PublishPointCloud2XYZ(std::vector<std::pair<int, AviaRot
             auto index = (verticalRayCount - verticle_index - 1) * rayCount + horizon_index;
             auto range = rayShape->GetRange(pair.first);
             auto intensity = rayShape->GetRetro(pair.first);
-            if (range >= maxDist || range <= minDist || range <= 1e-5){
+            // Only a max-range/no-hit ray certifies free space. A near hit or
+            // NaN must never clear through the obstacle or sensor's blind zone.
+            const bool no_hit = range >= maxDist;
+            const double mapping_range = no_hit ? maxDist : range;
+            const bool valid_mapping = std::isfinite(mapping_range) && mapping_range > minDist;
+            if (!std::isfinite(range) || range >= maxDist || range <= minDist || range <= 1e-5){
                 range = 0.0;
             }
 
@@ -454,6 +473,10 @@ void LivoxPointsPlugin::PublishPointCloud2XYZ(std::vector<std::pair<int, AviaRot
             {
                 pc[pt_count] = pt;
                 ++pt_count;
+                if (rosMappingPub && valid_mapping) {
+                    const auto endpoint = mapping_range * axis;
+                    mapping_pc[mapping_count++] = pcl::PointXYZ(endpoint.X(), endpoint.Y(), endpoint.Z());
+                }
             }
         }
     }
@@ -462,6 +485,13 @@ void LivoxPointsPlugin::PublishPointCloud2XYZ(std::vector<std::pair<int, AviaRot
     scan_point.header.stamp = timestamp;
     scan_point.header.frame_id = frameName;
     rosPointPub.publish(scan_point);
+    if (rosMappingPub) {
+        mapping_pc.resize(mapping_count);
+        sensor_msgs::PointCloud2 mapping_msg;
+        pcl::toROSMsg(mapping_pc, mapping_msg);
+        mapping_msg.header = scan_point.header;
+        rosMappingPub.publish(mapping_msg);
+    }
     // SendRosTf(parentEntity->WorldPose(), world->Name(), raySensor->ParentName());
     ros::spinOnce();
     if (scanPub && scanPub->HasConnections() && visualize) {

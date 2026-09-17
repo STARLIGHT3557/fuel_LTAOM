@@ -1,0 +1,341 @@
+diff --git a/fuel_planner/active_perception/include/active_perception/perception_utils.h b/fuel_planner/active_perception/include/active_perception/perception_utils.h
+index 343d56c..47fa865 100644
+--- a/fuel_planner/active_perception/include/active_perception/perception_utils.h
++++ b/fuel_planner/active_perception/include/active_perception/perception_utils.h
+@@ -22,6 +22,7 @@ public:
+   }
+   // Set position and yaw
+   void setPose(const Vector3d& pos, const double& yaw);
++  const Vector3d& getSensorPosition() const { return sensor_pos_; }
+ 
+   // Get info of current pose
+   void getFOV(vector<Vector3d>& list1, vector<Vector3d>& list2);
+@@ -32,11 +33,14 @@ private:
+   // Data
+   // Current camera pos and yaw
+   Vector3d pos_;
++  Vector3d sensor_pos_, lidar_translation_;
+   double yaw_;
+   // Camera plane's normals in world frame
+   vector<Vector3d> normals_;
+ 
+   /* Params */
++  bool lidar_360_;
++  double lidar_min_elevation_, lidar_max_elevation_, lidar_pitch_;
+   // Sensing range of camera
+   double left_angle_, right_angle_, top_angle_, max_dist_, vis_dist_;
+   // Normal vectors of camera FOV planes in camera frame
+@@ -48,4 +52,4 @@ private:
+ };
+ 
+ }  // namespace fast_planner
+-#endif
+\ No newline at end of file
++#endif
+diff --git a/fuel_planner/active_perception/src/frontier_finder.cpp b/fuel_planner/active_perception/src/frontier_finder.cpp
+index 5f912a5..f13c53c 100644
+--- a/fuel_planner/active_perception/src/frontier_finder.cpp
++++ b/fuel_planner/active_perception/src/frontier_finder.cpp
+@@ -110,6 +110,8 @@ void FrontierFinder::searchFrontiers() {
+       for (int z = min_id(2); z <= max_id(2); ++z) {
+         // Scanning the updated region to find seeds of frontiers
+         Eigen::Vector3i cur(x, y, z);
++        // Search bounds include the upper index, while the exploration box does not.
++        if (!inmap(cur) || !edt_env_->sdf_map_->isInBox(cur)) continue;
+         if (frontier_flag_[toadr(cur)] == 0 && knownfree(cur) && isNeighborUnknown(cur)) {
+           // Expand from the seed cell to find a complete frontier cluster
+           expandFrontier(cur);
+@@ -142,9 +144,9 @@ void FrontierFinder::expandFrontier(
+     auto nbrs = allNeighbors(cur);
+     for (auto nbr : nbrs) {
+       // Qualified cell should be inside bounding box and frontier cell not clustered
++      if (!inmap(nbr) || !edt_env_->sdf_map_->isInBox(nbr)) continue;
+       int adr = toadr(nbr);
+-      if (frontier_flag_[adr] == 1 || !edt_env_->sdf_map_->isInBox(nbr) ||
+-          !(knownfree(nbr) && isNeighborUnknown(nbr)))
++      if (frontier_flag_[adr] == 1 || !(knownfree(nbr) && isNeighborUnknown(nbr)))
+         continue;
+ 
+       edt_env_->sdf_map_->indexToPos(nbr, pos);
+@@ -740,7 +742,7 @@ int FrontierFinder::countVisibleCells(
+     if (!percep_utils_->insideFOV(cell)) continue;
+ 
+     // Check if frontier cell is visible (not occulded by obstacles)
+-    raycaster_->input(cell, pos);
++    raycaster_->input(cell, percep_utils_->getSensorPosition());
+     bool visib = true;
+     while (raycaster_->nextId(idx)) {
+       if (edt_env_->sdf_map_->getInflateOccupancy(idx) == 1 ||
+@@ -860,10 +862,12 @@ inline vector<Eigen::Vector3i> FrontierFinder::allNeighbors(const Eigen::Vector3
+ }
+ 
+ inline bool FrontierFinder::isNeighborUnknown(const Eigen::Vector3i& voxel) {
+-  // At least one neighbor is unknown
++  // Only unknown space inside the exploration box is an exploration objective.
++  // Exterior unknown voxels otherwise keep boundary frontiers alive indefinitely.
+   auto nbrs = sixNeighbors(voxel);
+   for (auto nbr : nbrs) {
+-    if (edt_env_->sdf_map_->getOccupancy(nbr) == SDFMap::UNKNOWN) return true;
++    if (edt_env_->sdf_map_->isInBox(nbr) &&
++        edt_env_->sdf_map_->getOccupancy(nbr) == SDFMap::UNKNOWN) return true;
+   }
+   return false;
+ }
+@@ -880,4 +884,4 @@ inline bool FrontierFinder::inmap(const Eigen::Vector3i& idx) {
+   return edt_env_->sdf_map_->isInMap(idx);
+ }
+ 
+-}  // namespace fast_planner
+\ No newline at end of file
++}  // namespace fast_planner
+diff --git a/fuel_planner/active_perception/src/perception_utils.cpp b/fuel_planner/active_perception/src/perception_utils.cpp
+index fc007a5..0f5b99e 100644
+--- a/fuel_planner/active_perception/src/perception_utils.cpp
++++ b/fuel_planner/active_perception/src/perception_utils.cpp
+@@ -4,6 +4,13 @@
+ 
+ namespace fast_planner {
+ PerceptionUtils::PerceptionUtils(ros::NodeHandle& nh) {
++  nh.param("perception_utils/lidar_360", lidar_360_, false);
++  nh.param("perception_utils/lidar_pitch", lidar_pitch_, 0.0);
++  nh.param("perception_utils/lidar_x", lidar_translation_.x(), 0.0);
++  nh.param("perception_utils/lidar_y", lidar_translation_.y(), 0.0);
++  nh.param("perception_utils/lidar_z", lidar_translation_.z(), 0.0);
++  nh.param("perception_utils/lidar_min_elevation", lidar_min_elevation_, -0.122173);
++  nh.param("perception_utils/lidar_max_elevation", lidar_max_elevation_, 0.925025);
+   nh.param("perception_utils/top_angle", top_angle_, -1.0);
+   nh.param("perception_utils/left_angle", left_angle_, -1.0);
+   nh.param("perception_utils/right_angle", right_angle_, -1.0);
+@@ -53,6 +60,8 @@ void PerceptionUtils::setPose(const Vector3d& pos, const double& yaw) {
+   // Transform the normals of camera FOV
+   Eigen::Matrix3d R_wb;
+   R_wb << cos(yaw_), -sin(yaw_), 0.0, sin(yaw_), cos(yaw_), 0.0, 0.0, 0.0, 1.0;
++  sensor_pos_ = pos_;
++  if (lidar_360_) sensor_pos_ += R_wb * lidar_translation_;
+   Vector3d pc = pos_;
+ 
+   Eigen::Matrix4d T_wb = Eigen::Matrix4d::Identity();
+@@ -70,6 +79,21 @@ void PerceptionUtils::getFOV(vector<Vector3d>& list1, vector<Vector3d>& list2) {
+   list1.clear();
+   list2.clear();
+ 
++  if (lidar_360_) {
++    for (int i = 0; i < 36; ++i) {
++      double a = i * 2.0 * M_PI / 36.0, b = (i + 1) * 2.0 * M_PI / 36.0;
++      for (double elev : {lidar_min_elevation_, lidar_max_elevation_}) {
++        Vector3d p1(cos(elev) * cos(a), cos(elev) * sin(a), sin(elev));
++        Vector3d p2(cos(elev) * cos(b), cos(elev) * sin(b), sin(elev));
++        const Eigen::Matrix3d rotation =
++            (Eigen::AngleAxisd(yaw_, Vector3d::UnitZ()) *
++             Eigen::AngleAxisd(lidar_pitch_, Vector3d::UnitY())).toRotationMatrix();
++        list1.push_back(sensor_pos_ + vis_dist_ * rotation * p1);
++        list2.push_back(sensor_pos_ + vis_dist_ * rotation * p2);
++      }
++    }
++    return;
++  }
+   // Get info for visualizing FOV at (pos, yaw)
+   Eigen::Matrix3d Rwb;
+   Rwb << cos(yaw_), -sin(yaw_), 0, sin(yaw_), cos(yaw_), 0, 0, 0, 1;
+@@ -82,9 +106,16 @@ void PerceptionUtils::getFOV(vector<Vector3d>& list1, vector<Vector3d>& list2) {
+ }
+ 
+ bool PerceptionUtils::insideFOV(const Vector3d& point) {
+-  Eigen::Vector3d dir = point - pos_;
++  Eigen::Vector3d dir = point - sensor_pos_;
+   if (dir.norm() > max_dist_) return false;
+ 
++  if (lidar_360_) {
++    // Test elevation in the mounted lidar frame, not the level body frame.
++    dir = Eigen::AngleAxisd(-lidar_pitch_, Vector3d::UnitY()) *
++          (Eigen::AngleAxisd(-yaw_, Vector3d::UnitZ()) * dir);
++    double elevation = atan2(dir.z(), hypot(dir.x(), dir.y()));
++    return elevation >= lidar_min_elevation_ && elevation <= lidar_max_elevation_;
++  }
+   dir.normalize();
+   for (auto n : normals_) {
+     if (dir.dot(n) < 0.0) return false;
+@@ -93,6 +124,11 @@ bool PerceptionUtils::insideFOV(const Vector3d& point) {
+ }
+ 
+ void PerceptionUtils::getFOVBoundingBox(Vector3d& bmin, Vector3d& bmax) {
++  if (lidar_360_) {
++    bmin = sensor_pos_ - Vector3d::Constant(max_dist_);
++    bmax = sensor_pos_ + Vector3d::Constant(max_dist_);
++    return;
++  }
+   double left = yaw_ + left_angle_;
+   double right = yaw_ - right_angle_;
+   Vector3d left_pt = pos_ + max_dist_ * Vector3d(cos(left), sin(left), 0);
+@@ -114,4 +150,4 @@ void PerceptionUtils::getFOVBoundingBox(Vector3d& bmin, Vector3d& bmax) {
+   }
+ }
+ 
+-}  // namespace fast_planner
+\ No newline at end of file
++}  // namespace fast_planner
+diff --git a/fuel_planner/bspline_opt/CMakeLists.txt b/fuel_planner/bspline_opt/CMakeLists.txt
+index 324f3bb..c9867c0 100755
+--- a/fuel_planner/bspline_opt/CMakeLists.txt
++++ b/fuel_planner/bspline_opt/CMakeLists.txt
+@@ -9,8 +9,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall")
+ find_package(Eigen3 REQUIRED)
+ find_package(PCL 1.7 REQUIRED)
+ 
+-set(NLOPT_INCLUDE_DIR "/usr/local/include")  
+-set(NLOPT_LIBRARY "/usr/local/lib/libnlopt.so")  
++find_path(NLOPT_INCLUDE_DIR nlopt.hpp REQUIRED)
++find_library(NLOPT_LIBRARY NAMES nlopt REQUIRED)
+ 
+ find_package(catkin REQUIRED COMPONENTS
+   roscpp
+diff --git a/fuel_planner/exploration_manager/CMakeLists.txt b/fuel_planner/exploration_manager/CMakeLists.txt
+index 63c09de..aa35484 100755
+--- a/fuel_planner/exploration_manager/CMakeLists.txt
++++ b/fuel_planner/exploration_manager/CMakeLists.txt
+@@ -66,4 +66,5 @@ target_link_libraries(write_tsp
+ add_executable(load_obj test/load_obj.cpp)
+ target_link_libraries(load_obj
+   ${catkin_LIBRARIES} ${PCL_LIBRARIES}
+-)
+\ No newline at end of file
++)
++add_dependencies(exploration_node ${catkin_EXPORTED_TARGETS})
+diff --git a/fuel_planner/exploration_manager/include/exploration_manager/fast_exploration_fsm.h b/fuel_planner/exploration_manager/include/exploration_manager/fast_exploration_fsm.h
+index f39c22e..c3985c5 100644
+--- a/fuel_planner/exploration_manager/include/exploration_manager/fast_exploration_fsm.h
++++ b/fuel_planner/exploration_manager/include/exploration_manager/fast_exploration_fsm.h
+@@ -47,7 +47,7 @@ private:
+   /* ROS utils */
+   ros::NodeHandle node_;
+   ros::Timer exec_timer_, safety_timer_, vis_timer_, frontier_timer_;
+-  ros::Subscriber trigger_sub_, odom_sub_;
++  ros::Subscriber trigger_sub_, odom_sub_, stop_sub_;
+   ros::Publisher replan_pub_, new_pub_, bspline_pub_;
+ 
+   /* helper functions */
+diff --git a/fuel_planner/exploration_manager/src/fast_exploration_fsm.cpp b/fuel_planner/exploration_manager/src/fast_exploration_fsm.cpp
+index f080ccc..4553076 100644
+--- a/fuel_planner/exploration_manager/src/fast_exploration_fsm.cpp
++++ b/fuel_planner/exploration_manager/src/fast_exploration_fsm.cpp
+@@ -38,6 +38,12 @@ void FastExplorationFSM::init(ros::NodeHandle& nh) {
+   safety_timer_ = nh.createTimer(ros::Duration(0.05), &FastExplorationFSM::safetyCallback, this);
+   frontier_timer_ = nh.createTimer(ros::Duration(0.5), &FastExplorationFSM::frontierCallback, this);
+ 
++  stop_sub_ = nh.subscribe<std_msgs::Empty>("/fuel/stop_planner", 1,
++      [this](const std_msgs::Empty::ConstPtr&) {
++        fd_->static_state_ = true;
++        fd_->trigger_ = false;
++        transitState(WAIT_TRIGGER, "stop");
++      });
+   trigger_sub_ =
+       nh.subscribe("/waypoint_generator/waypoints", 1, &FastExplorationFSM::triggerCallback, this);
+   odom_sub_ = nh.subscribe("/odom_world", 1, &FastExplorationFSM::odometryCallback, this);
+@@ -325,8 +331,8 @@ void FastExplorationFSM::frontierCallback(const ros::TimerEvent& e) {
+ }
+ 
+ void FastExplorationFSM::triggerCallback(const nav_msgs::PathConstPtr& msg) {
+-  if (msg->poses[0].pose.position.z < -0.1) return;
+-  if (state_ != WAIT_TRIGGER) return;
++  if (msg->poses.empty() || msg->poses[0].pose.position.z < -0.1) return;
++  if (state_ != WAIT_TRIGGER && state_ != FINISH) return;
+   fd_->trigger_ = true;
+   cout << "Triggered!" << endl;
+   transitState(PLAN_TRAJ, "triggerCallback");
+diff --git a/fuel_planner/plan_manage/CMakeLists.txt b/fuel_planner/plan_manage/CMakeLists.txt
+index deea7c0..7a3fcf0 100755
+--- a/fuel_planner/plan_manage/CMakeLists.txt
++++ b/fuel_planner/plan_manage/CMakeLists.txt
+@@ -88,4 +88,9 @@ add_executable(proc_msg2
+ target_link_libraries( proc_msg2
+     ${catkin_LIBRARIES} 
+     ${PCL_LIBRARIES}
+-    )  
+\ No newline at end of file
++    )
++add_dependencies(fast_planner_node ${catkin_EXPORTED_TARGETS})
++add_dependencies(plan_manage ${catkin_EXPORTED_TARGETS})
++add_dependencies(traj_server ${catkin_EXPORTED_TARGETS})
++add_dependencies(proc_msg ${catkin_EXPORTED_TARGETS})
++add_dependencies(proc_msg2 ${catkin_EXPORTED_TARGETS})
+diff --git a/fuel_planner/plan_manage/src/traj_server.cpp b/fuel_planner/plan_manage/src/traj_server.cpp
+index 2162e42..a2616cf 100644
+--- a/fuel_planner/plan_manage/src/traj_server.cpp
++++ b/fuel_planner/plan_manage/src/traj_server.cpp
+@@ -260,7 +260,7 @@ void cmdCallback(const ros::TimerEvent& e) {
+ 
+   ros::Time time_now = ros::Time::now();
+   double t_cur = (time_now - start_time_).toSec();
+-  Eigen::Vector3d pos, vel, acc, jer;
++  Eigen::Vector3d pos, vel, acc, jer = Eigen::Vector3d::Zero();
+   double yaw, yawdot;
+ 
+   if (t_cur < traj_duration_ && t_cur >= 0.0) {
+@@ -286,7 +286,7 @@ void cmdCallback(const ros::TimerEvent& e) {
+     ROS_WARN_THROTTLE(2, "flight time: %lf, path length: %lf, mean vel: %lf, energy is: % lf ", flight_t,
+                       len, len / flight_t, energy);
+   } else {
+-    cout << "[Traj server]: invalid time." << endl;
++    return;  // Do not publish uninitialized commands before trajectory start.
+   }
+ 
+   if (isLoopCorrection) {
+@@ -438,6 +438,8 @@ int main(int argc, char** argv) {
+   ros::NodeHandle node;
+   ros::NodeHandle nh("~");
+ 
++  ros::Subscriber stop_sub = node.subscribe<std_msgs::Empty>("/fuel/stop_planner", 1,
++      +[](const std_msgs::Empty::ConstPtr&) { receive_traj_ = false; });
+   ros::Subscriber bspline_sub = node.subscribe("planning/bspline", 10, bsplineCallback);
+   ros::Subscriber replan_sub = node.subscribe("planning/replan", 10, replanCallback);
+   ros::Subscriber new_sub = node.subscribe("planning/new", 10, newCallback);
+@@ -489,24 +491,7 @@ int main(int argc, char** argv) {
+   percep_utils_.reset(new PerceptionUtils(nh));
+ 
+   // test();
+-  // Initialization for exploration, move upward and downward
+-  for (int i = 0; i < 100; ++i) {
+-    cmd.position.z += 0.01;
+-    pos_cmd_pub.publish(cmd);
+-    ros::Duration(0.01).sleep();
+-  }
+-  for (int i = 0; i < 100; ++i) {
+-    cmd.position.z -= 0.01;
+-    pos_cmd_pub.publish(cmd);
+-    ros::Duration(0.01).sleep();
+-  }
+-  // ros::Duration(1.0).sleep();
+-  // for (int i = 0; i < 100; ++i)
+-  // {
+-  //   cmd.position.x -= 0.01;
+-  //   pos_cmd_pub.publish(cmd);
+-  //   ros::Duration(0.01).sleep();
+-  // }
++  // Gazebo/PX4 takeoff is handled by Prometheus, never by this server.
+ 
+   R_loop = Eigen::Quaterniond(1, 0, 0, 0).toRotationMatrix();
+   T_loop = Eigen::Vector3d(0, 0, 0);
+diff --git a/fuel_planner/traj_utils/src/planning_visualization.cpp b/fuel_planner/traj_utils/src/planning_visualization.cpp
+index ecad939..1260bf8 100644
+--- a/fuel_planner/traj_utils/src/planning_visualization.cpp
++++ b/fuel_planner/traj_utils/src/planning_visualization.cpp
+@@ -116,6 +116,9 @@ void PlanningVisualization::drawSpheres(const vector<Eigen::Vector3d>& list, con
+   mk.action = visualization_msgs::Marker::DELETE;
+   pubs_[pub_id].publish(mk);
+ 
++  // An empty list only removes the old marker. RViz rejects empty ADD lists.
++  if (list.empty()) return;
++
+   // pub new marker
+   fillGeometryInfo(mk, list);
+   mk.action = visualization_msgs::Marker::ADD;
+@@ -134,6 +137,9 @@ void PlanningVisualization::drawCubes(const vector<Eigen::Vector3d>& list, const
+   mk.action = visualization_msgs::Marker::DELETE;
+   pubs_[pub_id].publish(mk);
+ 
++  // An empty list only removes the old marker. RViz rejects empty ADD lists.
++  if (list.empty()) return;
++
+   // pub new marker
+   fillGeometryInfo(mk, list);
+   mk.action = visualization_msgs::Marker::ADD;

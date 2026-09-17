@@ -1,6 +1,7 @@
 <launch>
 	<!-- Gazebo configs -->
     <arg name="gazebo_enable" default="true"/>
+    <arg name="rviz_enable" default="true"/>
 	<arg name="world" default="$(find prometheus_gazebo)/gazebo_worlds/planning_worlds/planning_easy2.world"/>
     <!-- 启动Gazebo -->
     <group if="$(arg gazebo_enable)">
@@ -54,6 +55,6 @@
 	</node>
 	</group>
 	<!-- This node launches rviz -->
-	<node name="rviz" pkg="rviz" type="rviz" 
+	<node if="$(arg rviz_enable)" name="rviz" pkg="rviz" type="rviz"
         args="-d $(find prometheus_gazebo)/launch_uav_with_sensor/3dlidar_mapping.rviz"/>
 </launch>

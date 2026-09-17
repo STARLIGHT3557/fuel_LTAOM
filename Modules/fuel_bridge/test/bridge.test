@@ -1,0 +1,15 @@
+<launch>
+  <group ns="fuel">
+    <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" required="true">
+      <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
+      <remap from="goal" to="/move_base_simple/goal"/>
+      <param name="box_min_x" value="-1.0"/>
+      <param name="box_min_y" value="-11.0"/>
+      <param name="box_min_z" value="0.5"/>
+      <param name="box_max_x" value="22.0"/>
+      <param name="box_max_y" value="10.0"/>
+      <param name="box_max_z" value="2.5"/>
+    </node>
+  </group>
+  <test test-name="fuel_bridge_contract" pkg="prometheus_fuel" type="test_bridge.py" time-limit="30"/>
+</launch>

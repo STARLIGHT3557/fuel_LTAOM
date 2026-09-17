@@ -1,0 +1,34 @@
+sdf_map:
+  resolution: 0.2
+  obstacles_inflation: 0.4
+  max_ray_length: 10.0
+  ground_height: -1.0
+  virtual_ceil_height: 3.5
+  local_map_margin: 20
+map_ros:
+  frame_id: world
+  visualization_truncate_height: 3.5
+  visualization_truncate_low: 0.0
+  show_all_map: true
+frontier:
+  cluster_min: 30
+  min_candidate_clearance: 0.5
+  min_visib_num: 10
+perception_utils:
+  lidar_360: true
+  # Match the sensor mounting pitch in bridge.yaml and p600_mid360.sdf.jinja.
+  lidar_pitch: 0.35
+  lidar_x: 0.1471448904
+  lidar_y: 0.0
+  lidar_z: 0.2769686356
+  lidar_min_elevation: -0.122173
+  lidar_max_elevation: 0.925025
+  max_dist: 10.0
+  vis_dist: 2.0
+  top_angle: 0.56125
+  left_angle: 0.69222
+  right_angle: 0.68901
+manager:
+  clearance_threshold: 0.5
+search:
+  margin: 0.4

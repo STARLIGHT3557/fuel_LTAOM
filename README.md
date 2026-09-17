@@ -3,6 +3,13 @@
 # 更改： 相较于官网Prometheus， 删去了无关的代码， 加入super代码，并进行基于gazebo的仿真。 需要配套prometheus_px4进行使用
 
 ### 1. 使用方法： 
+首次运行前，安装 OctoMap 建图节点的运行依赖（ROS Noetic）：
+```bash
+sudo apt-get update
+sudo apt-get install ros-noetic-octomap-server
+```
+仅安装 `ros-noetic-octomap` 或 `ros-noetic-octomap-msgs` 不包含 `octomap_server_node`。
+
 ```
    source source.sh
 ```
@@ -11,6 +18,19 @@
 ### 2. 在终端中启动base_simulation.sh 
 
 ### 3. 在打开的rviz中通过3d nav goal 给目标点
+
+### 4. FUEL 自主探索（独立启动）
+
+```bash
+bash compile_fuel.sh
+bash fuel_simulation.sh
+```
+
+起飞悬停并进入 `COMMAND_CONTROL` 后，通过 `rosservice call /fuel/start "{}"` 或 RViz 的 **2D Nav Goal** 启动探索；`rosservice call /fuel/stop "{}"` 停止并请求悬停。不要与 `base_simulation.sh` 同时运行。
+
+依赖安装、探索边界、MID360 外参、数据接口和测试方法见 [FUEL 接入说明](Modules/fuel_bridge/README.md)。
+
+OctoMap、RViz、点云坐标系、探索范围和边界绕圈等问题的排查过程见 [仿真问题与解决记录](Modules/fuel_bridge/TROUBLESHOOTING.md)。
 
 # Prometheus - 自主无人机开源项目
 

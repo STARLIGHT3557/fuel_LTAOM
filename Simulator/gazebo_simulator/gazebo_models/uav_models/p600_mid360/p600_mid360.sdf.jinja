@@ -424,6 +424,8 @@
             <csv_file_name>mid360.csv</csv_file_name>
             <publish_pointcloud_type>1</publish_pointcloud_type>
             <ros_topic>livox/lidar</ros_topic>
+            <!-- Includes max-range no-hit endpoints for free-space raycasting. -->
+            <mapping_topic>livox/lidar_mapping</mapping_topic>
             <frameName>uav1/lidar_link</frameName>
           </plugin>
         </sensor>

@@ -1,0 +1,77 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Enabled: true
+  Global Options:
+    Fixed Frame: world
+    Background Color: 35; 35; 35
+    Frame Rate: 20
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Plane Cell Count: 40
+      Cell Size: 1
+    - Class: rviz/PointCloud2
+      Name: FUEL occupancy
+      Enabled: true
+      Position Transformer: XYZ
+      Topic: /sdf_map/occupancy_all
+      Queue Size: 2
+      Size (m): 0.2
+      Style: Boxes
+      Color Transformer: AxisColor
+      Axis: Z
+    - Class: rviz/PointCloud2
+      Name: MID360 world cloud
+      Enabled: true
+      Position Transformer: XYZ
+      Color Transformer: AxisColor
+      Axis: Z
+      Topic: /fuel/cloud_hits_world
+      Queue Size: 2
+      Size (Pixels): 2
+      Size (m): 0.03
+      Style: Points
+    - Class: rviz/Marker
+      Name: Frontiers
+      Enabled: true
+      Marker Topic: /planning_vis/frontier
+    - Class: rviz/Marker
+      Name: Trajectory
+      Enabled: true
+      Marker Topic: /planning_vis/trajectory
+    - Class: rviz/Marker
+      Name: Travel
+      Enabled: true
+      Marker Topic: /planning/travel_traj
+    - Class: rviz/Marker
+      Name: Exploration area
+      Enabled: true
+      Marker Topic: /fuel/exploration_bounds
+    - Class: rviz/Marker
+      Name: UAV model
+      Enabled: true
+      Marker Topic: /fuel/uav_mesh
+    - Class: rviz/Odometry
+      Name: UAV odometry
+      Enabled: true
+      Topic: /uav1/prometheus/odom
+      Keep: 1
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 35
+      Pitch: 0.8
+      Yaw: 0.8
+      Focal Point: {X: 10.5, Y: -0.5, Z: 1.5}
