@@ -13,6 +13,26 @@ sudo apt-get install ros-noetic-octomap-server
 ```
    source source.sh
 ```
+### 配置prometheus_px4
+```
+git clone https://gitee.com/amovlab/prometheus_px4.git
+cd prometheus_px4/Tools/setup
+source ./ubuntu.sh
+
+cd prometheus_px4/Tools/setup
+source ./ubuntu.sh
+
+安装子模块以及相关依赖
+cd prometheus_px4
+git submodule update --init --recursive
+pip3 install --user toml empy jinja2 packaging
+```
+编译prometheus_px4
+```
+cd prometheus_px4
+make amovlab_sitl_default gazebo_p450
+
+```
 #### 注： 修改source.sh中对应路径, 并将其放在~/.bashrc中
 
 ### 2. 在终端中启动base_simulation.sh 
