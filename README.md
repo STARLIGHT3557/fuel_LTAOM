@@ -12,7 +12,7 @@ src/
   fuel_bridge/                 # 点云转换、探索触发、边界及停止保护
   uav_control/                 # 当前轨迹控制器、PX4 状态适配、RViz 模型
   messages/                    # 使用中的 Prometheus/PositionCommand 消息
-  gazebo_simulator/            # P600/MID360/GPS、圆柱场、MAVROS 配置
+  gazebo_simulator/            # P600/MID360/GPS、圆柱场及 indoor4、MAVROS 配置
   livox_laser_gazebo_plugins/   # 真实回波与无回波建图射线
 third_party/FUEL/              # 完整上游源码，含已有修复
 scripts/                      # 检查和测试入口
@@ -58,6 +58,17 @@ export PX4_ROOT="$HOME/prometheus_px4"
 # export PX4_BUILD_DIR=/path/to/px4/build/amovlab_sitl_default
 bash fuel_simulation.sh
 ```
+
+切换到 XTDrone 的 `indoor4` 迷宫场景（先关闭已有仿真）：
+
+```bash
+bash fuel_simulation.sh scene:=indoor4
+```
+
+默认仍为圆柱场，也可使用 `scene:=cylinder`。`indoor4` 包含 150 面墙，场地约 68×54 m；出生点为 Gazebo `(0, -1)`，起飞指令仍使用局部坐标 `[0, 0, 1.5]`。入口自动设置 80×64×6 m 地图，局部探索边界为 x∈[-31,39]、y∈[-26,29]、z∈[0.5,2.0] m。墙高 2.5 m，探索目标高度上限设为 2 m。自定义出生点时边界会自动换算，若超出地图分配范围，还需扩大 `map_size_x/map_size_y`。
+
+此场景已通过 launch 参数解析及静态资源检查；实际飞行验证因系统磁盘空间不足尚未完成。现有 `scripts/check_simulation.py` 使用圆柱场边界，仅适用于默认圆柱场。
+
 
 启动后只有一个 RViz。`gui:=false` 关闭 Gazebo 窗口，`rviz:=false` 关闭 RViz；`spawn_x/spawn_y` 控制出生点并自动换算探索边界。默认探索圆柱场，局部范围 x∈[-1,22]、y∈[-11,10]、z∈[0.5,2.5] m。
 

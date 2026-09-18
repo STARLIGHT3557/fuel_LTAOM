@@ -24,6 +24,17 @@ bash compile_fuel.sh
 bash fuel_simulation.sh
 ```
 
+切换到 XTDrone 的 `indoor4` 迷宫场景（先关闭已有仿真）：
+
+```bash
+bash fuel_simulation.sh scene:=indoor4
+```
+
+默认仍为圆柱场，也可使用 `scene:=cylinder`。`indoor4` 包含 150 面墙，场地约 68×54 m；出生点为 Gazebo `(0, -1)`，起飞指令仍使用局部坐标 `[0, 0, 1.5]`。入口自动设置 80×64×6 m 地图，局部探索边界为 x∈[-31,39]、y∈[-26,29]、z∈[0.5,2.0] m。墙高 2.5 m，探索目标高度上限设为 2 m。自定义出生点时边界会自动换算，若超出地图分配范围，还需扩大 `map_size_x/map_size_y`。
+
+此场景已通过 launch 参数解析及静态资源检查；实际飞行验证因系统磁盘空间不足尚未完成。现有 `scripts/check_simulation.py` 使用圆柱场边界，仅适用于默认圆柱场。
+
+
 它启动原 P600/MID360 Gazebo 场景、MAVROS、Prometheus 控制器和 FUEL。FUEL 自己维护占据栅格和 ESDF，不依赖 OctoMap，也不需要启动 `3dlidar_to_octomap.launch` 或 SUPER。只打开一个 FUEL RViz，默认显示世界坐标点云、地图、前沿、无人机模型和黄色探索边界框；`rviz:=false` 可关闭 RViz。模型复用 Prometheus 发布的 `hummingbird.mesh` 示意模型，并非 Gazebo P600 的完整外观。所有节点及模型资源在同一工作空间解析。
 
 按 [根目录启动说明](../../README.md) 切换 OFFBOARD、解锁并起飞到约 1.5 m，等待无人机悬停、FUEL 日志出现 `WAIT_TRIGGER` 且 RViz 中已有地图。点击 RViz 工具栏的 **2D Nav Goal**，在地图上按住左键拖出方向箭头并松开，即可开始探索，无需调用服务。

@@ -3,19 +3,22 @@
   <arg name="odom_topic" default="/uav$(arg uav_id)/prometheus/odom"/>
   <arg name="cloud_topic" default="/livox/lidar_mapping"/>
   <arg name="lidar_frame" default="uav$(arg uav_id)/lidar_link"/>
-  <arg name="map_size_x" default="48.0"/>
-  <arg name="map_size_y" default="32.0"/>
+  <!-- A dictionary lookup rejects unsupported scene names. -->
+  <arg name="scene" default="cylinder"/>
+  <arg name="world_file" value="$(eval find('prometheus_gazebo') + '/gazebo_worlds/planning_worlds/' + {'cylinder': 'planning_easy2.world', 'indoor4': 'indoor4.world'}[arg('scene')])"/>
+  <arg name="map_size_x" default="$(eval {'cylinder': 48.0, 'indoor4': 80.0}[arg('scene')])"/>
+  <arg name="map_size_y" default="$(eval {'cylinder': 32.0, 'indoor4': 64.0}[arg('scene')])"/>
   <arg name="map_size_z" default="6.0"/>
-  <arg name="spawn_x" default="-10.0"/>
-  <arg name="spawn_y" default="0.0"/>
-  <!-- planning_easy2 cylinder field plus the western takeoff entrance.
-       Convert Gazebo bounds to PX4/Prometheus local ENU coordinates. -->
-  <arg name="box_min_x" default="$(eval -11.0 - float(arg('spawn_x')))"/>
-  <arg name="box_min_y" default="$(eval -11.0 - float(arg('spawn_y')))"/>
+  <arg name="spawn_x" default="$(eval {'cylinder': -10.0, 'indoor4': 0.0}[arg('scene')])"/>
+  <arg name="spawn_y" default="$(eval {'cylinder': 0.0, 'indoor4': -1.0}[arg('scene')])"/>
+  <!-- Convert Gazebo field bounds to PX4/Prometheus local ENU coordinates. -->
+  <arg name="box_min_x" default="$(eval {'cylinder': -11.0, 'indoor4': -31.0}[arg('scene')] - float(arg('spawn_x')))"/>
+  <arg name="box_min_y" default="$(eval {'cylinder': -11.0, 'indoor4': -27.0}[arg('scene')] - float(arg('spawn_y')))"/>
   <arg name="box_min_z" default="0.5"/>
-  <arg name="box_max_x" default="$(eval 12.0 - float(arg('spawn_x')))"/>
-  <arg name="box_max_y" default="$(eval 10.0 - float(arg('spawn_y')))"/>
-  <arg name="box_max_z" default="2.5"/>
+  <arg name="box_max_x" default="$(eval {'cylinder': 12.0, 'indoor4': 39.0}[arg('scene')] - float(arg('spawn_x')))"/>
+  <arg name="box_max_y" default="$(eval {'cylinder': 10.0, 'indoor4': 28.0}[arg('scene')] - float(arg('spawn_y')))"/>
+  <!-- Keep indoor flight goals below the 2.5 m maze walls. -->
+  <arg name="box_max_z" default="$(eval {'cylinder': 2.5, 'indoor4': 2.0}[arg('scene')])"/>
   <arg name="max_vel" default="1.0"/>
   <arg name="max_acc" default="1.0"/>
   <arg name="gui" default="true"/>
@@ -25,6 +28,7 @@
     <arg name="spawn_x" value="$(arg spawn_x)"/>
     <arg name="spawn_y" value="$(arg spawn_y)"/>
     <arg name="gui" value="$(arg gui)"/>
+    <arg name="world_file" value="$(arg world_file)"/>
   </include>
   <include file="$(find prometheus_uav_control)/launch/control.launch">
     <arg name="uav_id" value="$(arg uav_id)"/>

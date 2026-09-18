@@ -2,6 +2,7 @@
   <arg name="uav_id" default="1"/>
   <arg name="spawn_x" default="-10.0"/>
   <arg name="spawn_y" default="0.0"/>
+  <arg name="world_file" default="$(find prometheus_gazebo)/gazebo_worlds/planning_worlds/planning_easy2.world"/>
   <arg name="gui" default="true"/>
   <arg name="ID" value="$(eval arg('uav_id') - 1)"/>
   <arg name="tcp_port" value="$(eval 4560 + arg('ID'))"/>
@@ -12,7 +13,7 @@
   <env name="PX4_ESTIMATOR" value="ekf2"/>
   <env name="PX4_SIM_SPEED_FACTOR" value="1.0"/>
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" value="$(find prometheus_gazebo)/gazebo_worlds/planning_worlds/planning_easy2.world"/>
+    <arg name="world_name" value="$(arg world_file)"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="$(arg gui)"/>
   </include>
