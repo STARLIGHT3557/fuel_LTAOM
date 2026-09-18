@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -eo pipefail
 fuel_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-if [[ ! -f "$fuel_root/build/fuel_ws/devel/setup.bash" ]]; then
-  echo "Run bash $fuel_root/compile_fuel.sh first." >&2
+source "$fuel_root/source.sh"
+for fuel_node in prometheus_fuel/fuel_bridge prometheus_uav_control/uav_control_main exploration_manager/exploration_node plan_manage/traj_server; do
+  if [[ ! -x "$fuel_root/devel/fuel/lib/$fuel_node" ]]; then
+    echo "Build incomplete ($fuel_node missing); run bash compile_fuel.sh." >&2
+    exit 1
+  fi
+done
+if [[ ! -x "$PX4_BUILD_DIR/bin/px4" || ! -f "$PX4_BUILD_DIR/build_gazebo/libgazebo_mavlink_interface.so" ]]; then
+  echo "Build external PX4 SITL first; check PX4_ROOT and PX4_BUILD_DIR ($PX4_BUILD_DIR)." >&2
   exit 1
 fi
-"$fuel_root/Modules/fuel_bridge/scripts/fuel_env.sh" true
-source "$fuel_root/source.sh"
-export ROS_PACKAGE_PATH="$fuel_root/Modules/fuel_bridge:$ROS_PACKAGE_PATH"
-# The outer launch uses the original Gazebo/controller environment. Only the
-# nested FUEL launch switches to its isolated environment.
 exec roslaunch prometheus_fuel simulation.launch "$@"

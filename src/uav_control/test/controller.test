@@ -1,0 +1,6 @@
+<launch>
+  <include file="$(find prometheus_uav_control)/launch/control.launch">
+    <arg name="uav_id" value="99"/>
+  </include>
+  <test test-name="p600_controller" pkg="prometheus_uav_control" type="test_controller.py" time-limit="45"/>
+</launch>

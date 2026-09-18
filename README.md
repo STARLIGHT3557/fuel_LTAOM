@@ -1,104 +1,118 @@
-<img src="https://z3.ax1x.com/2021/05/05/gKVnHJ.png" alt="prometheus logo" align="right" height="70" />
+# P600 / MID360 / FUEL 自主探索仿真
 
-# 更改： 相较于官网Prometheus， 删去了无关的代码， 加入super代码，并进行基于gazebo的仿真。 需要配套prometheus_px4进行使用
+本分支只维护 **ROS Noetic＋Gazebo 11＋P600＋MID360＋单机 FUEL**。定位来自 PX4/MAVROS 的 GPS/惯性融合，MID360 提供探索建图点云。
 
-### 1. 使用方法： 
-首次运行前，安装 OctoMap 建图节点的运行依赖（ROS Noetic）：
+FUEL 完整源码直接纳入 [third_party/FUEL](third_party/FUEL)，包括上游规划、仿真器、示例、资源与许可证。构建只选择当前 P600 仿真需要的规划模块。来源版本及本地修复见 [FUEL 修改记录](third_party/FUEL/LOCAL_CHANGES.md)。
+
+## 目录
+
+```text
+src/
+  fuel -> ../third_party/FUEL/fuel_planner
+  fuel_bridge/                 # 点云转换、探索触发、边界及停止保护
+  uav_control/                 # 当前轨迹控制器、PX4 状态适配、RViz 模型
+  messages/                    # 使用中的 Prometheus/PositionCommand 消息
+  gazebo_simulator/            # P600/MID360/GPS、圆柱场、MAVROS 配置
+  livox_laser_gazebo_plugins/   # 真实回波与无回波建图射线
+third_party/FUEL/              # 完整上游源码，含已有修复
+scripts/                      # 检查和测试入口
+docs/                         # 排障与重构记录
+compile_fuel.sh                # 构建全部本地组件
+fuel_simulation.sh             # 启动完整仿真
+source.sh                     # 加载同一工作空间及外部 PX4 路径
+```
+
+## 准备和编译
+
+在 Ubuntu 20.04 / ROS Noetic / Gazebo 11 环境中安装依赖：
+
 ```bash
 sudo apt-get update
-sudo apt-get install ros-noetic-octomap-server
+sudo apt-get install ros-noetic-gazebo-ros-pkgs ros-noetic-mavros ros-noetic-mavros-extras \
+  ros-noetic-pcl-ros ros-noetic-cv-bridge ros-noetic-rostest ros-noetic-rviz \
+  libnlopt-dev libnlopt-cxx-dev libarmadillo-dev python3-jinja2 python3-numpy
 ```
-仅安装 `ros-noetic-octomap` 或 `ros-noetic-octomap-msgs` 不包含 `octomap_server_node`。
 
-```
-   source source.sh
-```
-### 配置prometheus_px4
-```
-git clone https://gitee.com/amovlab/prometheus_px4.git
-cd prometheus_px4/Tools/setup
-source ./ubuntu.sh
+PX4 使用原工程配套的 `prometheus_px4`，继续单独维护。已有可运行的 checkout 可以直接复用；本仓库不下载、修改或编译它。需要的产物是 `build/amovlab_sitl_default/bin/px4` 和 `build/amovlab_sitl_default/build_gazebo/` 中的飞行动力学/GPS 插件，固件须包含 `p600_mid360` 启动配置。
 
-cd prometheus_px4/Tools/setup
-source ./ubuntu.sh
+如果需要准备外部 PX4，可从 `https://gitee.com/amovlab/prometheus_px4.git` 获取，按其说明安装依赖、初始化子模块，并构建 `amovlab_sitl_default` 及 Gazebo 插件。当前验证所用版本见 [模型来源说明](src/gazebo_simulator/ASSET_SOURCES.md)。MAVROS 的 GeographicLib 数据也应按其安装说明准备。
 
-安装子模块以及相关依赖
-cd prometheus_px4
-git submodule update --init --recursive
-pip3 install --user toml empy jinja2 packaging
-```
-编译prometheus_px4
-```
-cd prometheus_px4
-make amovlab_sitl_default gazebo_p450
-
-```
-#### 注： 修改source.sh中对应路径, 并将其放在~/.bashrc中
-
-### 2. 在终端中启动base_simulation.sh 
-
-### 3. 在打开的rviz中通过3d nav goal 给目标点
-
-### 4. FUEL 自主探索（独立启动）
+从本工程根目录执行：
 
 ```bash
 bash compile_fuel.sh
+```
+
+这一次构建包含 FUEL、桥接、控制器、消息和雷达插件，不需要先构建旧工程。默认两个编译任务，可用 `FUEL_BUILD_JOBS=4 bash compile_fuel.sh` 调整。
+
+源码为 `src/`，产物为 `build/fuel/`、`devel/fuel/`。旧的 `build/fuel_ws` 和根目录旧 `devel/setup.bash` 不再使用。切换分支后重新运行上述脚本；所有源代码及模型数据均已入库，构建过程不访问 GitHub。
+
+## 启动和探索
+
+终端一：
+
+```bash
+# 默认 $HOME/prometheus_px4；其他位置在启动前指定。
+export PX4_ROOT="$HOME/prometheus_px4"
+# 默认 $PX4_ROOT/build/amovlab_sitl_default；必要时指定其他构建目录。
+# export PX4_BUILD_DIR=/path/to/px4/build/amovlab_sitl_default
 bash fuel_simulation.sh
 ```
 
-起飞悬停并进入 `COMMAND_CONTROL` 后，通过 `rosservice call /fuel/start "{}"` 或 RViz 的 **2D Nav Goal** 启动探索；`rosservice call /fuel/stop "{}"` 停止并请求悬停。不要与 `base_simulation.sh` 同时运行。
+启动后只有一个 RViz。`gui:=false` 关闭 Gazebo 窗口，`rviz:=false` 关闭 RViz；`spawn_x/spawn_y` 控制出生点并自动换算探索边界。默认探索圆柱场，局部范围 x∈[-1,22]、y∈[-11,10]、z∈[0.5,2.5] m。
 
-依赖安装、探索边界、MID360 外参、数据接口和测试方法见 [FUEL 接入说明](Modules/fuel_bridge/README.md)。
+等待 PX4 连接、定位有效、RViz 点云和地图出现，再等待至少 2 秒仿真时间，让连续设定值流建立。终端二，从工程根目录操作：
 
-OctoMap、RViz、点云坐标系、探索范围和边界绕圈等问题的排查过程见 [仿真问题与解决记录](Modules/fuel_bridge/TROUBLESHOOTING.md)。
+```bash
+source source.sh
+rosservice call /uav1/mavros/set_mode "{base_mode: 0, custom_mode: 'OFFBOARD'}"
+rosservice call /uav1/mavros/cmd/arming "{value: true}"
+rostopic echo -n 1 /uav1/mavros/state
+```
 
-# Prometheus - 自主无人机开源项目
+服务返回 `mode_sent: True` 只表示请求已发送；若实际模式尚未切换，等待后重试。确认实际状态为 `OFFBOARD`、`armed: True`，再发送局部坐标中出生点上方 1.5 m 的目标：
 
-[[English Readme]](https://github.com/amov-lab/Prometheus/blob/master/README_EN.md)
+```bash
+rostopic pub -1 /uav1/prometheus/command prometheus_msgs/UAVCommand \
+  "{Agent_CMD: 4, Move_mode: 0, position_ref: [0.0, 0.0, 1.5], yaw_ref: 0.0, Command_ID: 1}"
+```
 
-**Prometheus**是希腊神话中最具智慧的神明之一，希望本项目能为无人机研发带来无限的智慧与光明。
+稳定悬停、日志显示 `WAIT_TRIGGER` 后，在 RViz **2D Nav Goal** 按住左键拖出箭头并松开，即可开始自主探索。点击位置仅作启动信号，后续目标由 FUEL 选择。
 
-## 项目总览
+停止探索并锁定当前位置悬停：
 
-Prometheus是一套开源的**自主无人机软件系统平台**，为无人机的智能与自主飞行提供**全套解决方案**。本项目基于[PX4开源飞控固件](https://docs.px4.io/main/zh/index.html)和[ROS机器人操作系统](https://wiki.ros.org/)，旨在为无人机开发者配套成熟可用的**机载电脑端**软件系统，提供更加简洁快速的开发体验。目前已集成**控制**、**规划**及**目标检测**等研究方向，提供多个功能demo，并配套有Amovlab仿真组件。
+```bash
+rosservice call /fuel/stop "{}"
+```
 
- - Github：https://github.com/amov-lab/Prometheus
- - Gitee：https://gitee.com/amovlab/Prometheus
- - **开源项目，维护不易，还烦请点一个star收藏，谢谢支持！**
+需要降落时，先停止探索，再发送降落命令：
 
-## 快速入门
+```bash
+rostopic pub -1 /uav1/prometheus/command prometheus_msgs/UAVCommand "{Agent_CMD: 3}"
+```
 
- - 安装及使用：[Prometheus使用手册](https://docs.amovlab.com/prometheus-wiki/#/src/Prometheus-%E8%87%AA%E4%B8%BB%E6%97%A0%E4%BA%BA%E6%9C%BA%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE/Prometheus-%E8%87%AA%E4%B8%BB%E6%97%A0%E4%BA%BA%E6%9C%BA%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE)
-    - 需掌握C语言基础（大部分程序为C语言，部分模块有少量C++和python的语法）。
-    - 纯新手入门者建议先自学ROS官网教程。
-    - PX4飞控代码可不掌握，但需要掌握基本概念及基本操作。
+探索完成后维持最终有效轨迹段的停止点，不自动返航或降落。再次探索前先调用 `/fuel/stop` 复位，然后重新点击 **2D Nav Goal**。
 
- - 答疑及交流：
-    - 答疑论坛（官方定期答疑，推荐）：[阿木社区-Prometheus问答专区](https://bbs.amovlab.com/forum.php?mod=forumdisplay&fid=101)
-    - 添加微信jiayue199506（备注消息：Prometheus）进入Prometheus自主无人机交流群。
-    - B站搜索并关注“阿木社区”，开发团队定期直播答疑。
+## 控制与参数
 
-## 进阶学习
+控制链为 **FUEL 位置/速度/加速度 → 位置和速度反馈＋加速度前馈 → 姿态/推力 → MAVROS → PX4**。保留原 P600 增益、反馈限幅和推力估计，仅保留模式 9 的轨迹跟踪、模式 0 的定点，以及悬停和降落。参数在 [p600.yaml](src/uav_control/config/p600.yaml)。
 
- - Promehteus自主无人机二次开发课程： 本课程偏重本项目中的基础知识和操作实践，适合本项目入门者。课程报名[请戳这里](https://bbs.amovlab.com/plugin.php?id=zhanmishu_video:video&mod=video&cid=43)。
- - 更多进阶学习资料正在紧张筹备中。
+[bridge.yaml](src/fuel_bridge/config/bridge.yaml) 管理雷达外参和超时，[mid360.yaml](src/fuel_bridge/config/mid360.yaml) 管理地图、视场和规划；探索边界由 [simulation.launch](src/fuel_bridge/launch/simulation.launch) 设置。控制器仅在解锁、OFFBOARD 且定位有效时报告 `COMMAND_CONTROL`。
 
-## 硬件产品
+详细接口、建图射线和边界参数见 [FUEL 使用说明](src/fuel_bridge/README.md)。此前两套 RViz、空 Marker、模型加载、坐标系与边界绕圈等问题见 [排障记录](docs/TROUBLESHOOTING.md)，本次删减和验证结果见 [重构记录](docs/REFACTOR.md)。
 
- - 仿真必备遥控器：[点击购买](https://item.taobao.com/item.htm?spm=a1z10.5-c-s.w4002-22617251051.13.2ffa3e75uvfxuB&id=612837659406)
+## 测试
 
- - **Prometheus二次开发平台：**   [Prometheus 450第三代正式发布](https://mp.weixin.qq.com/s/LdtmLQ2eYUwg-pRklMXL8w)！
-    - 丰富的文档资料，详情[请戳这里](https://wiki.amovlab.com/public/prometheuswiki/) 。
-    - 售后服务与技术指导。
-    - 免费赠送 成都线下工程实训课程 及 Promehteus自主无人机二次开发课程购买折扣。
- 
- - 其他配套硬件：机架、机载电脑、双目、激光雷达等无人机二次开发硬件请关注 [阿木实验室淘宝店](https://shop142114972.taobao.com/?spm=a230r.7195193.1997079397.2.67d03d8dJQgFRW)　或　[阿木实验室京东旗舰店](https://mall.jd.com/index-10260560.html?from=pc)。
- 
+```bash
+bash scripts/test_fuel.sh
+```
 
+包括控制器/状态适配、桥接、地图边界和实际 FUEL 规划链路的隔离 ROS 测试。它们使用合成输入，不替代 Gazebo/PX4 飞行动力学验证。
 
-## Prometheus校园赞助计划
- - 奖励使用Prometheus进行实验并发表相关论文的学生科研工作者。
- 
- - 奖励为Prometheus提供新功能或帮忙进行测试的学生开发者。
+关闭已有仿真后，可运行隔离的无界面短程飞行检查（会自动解锁、起飞、探索并停止，只控制本次启动的仿真实例）：
 
-- 详情[请戳这里](https://mp.weixin.qq.com/s/i9CpIctu56LfQFIciwzImA) ！
+```bash
+src/fuel_bridge/scripts/fuel_env.sh python3 scripts/check_simulation.py
+```
+
+它验证真实插件的回波/无回波射线、起飞、RViz 话题触发和停止悬停，不代表圆柱场整场探索覆盖验收。检查脚本检测到已有 PX4/Gazebo 时会退出。
