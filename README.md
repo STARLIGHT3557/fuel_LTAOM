@@ -77,6 +77,8 @@ rostopic pub -1 /uav1/prometheus/command prometheus_msgs/UAVCommand \
   "{Agent_CMD: 4, Move_mode: 0, position_ref: [0.0, 0.0, 1.5], yaw_ref: 0.0, Command_ID: 1}"
 ```
 
+如果已经用其他模式起飞，切入 OFFBOARD 会锁定切换时的当前位置和朝向；无需再次发送上述固定高度目标。位置和轨迹 `Move` 指令只在解锁且进入 OFFBOARD 后接受，不会预存其他模式下的旧目标。
+
 稳定悬停、日志显示 `WAIT_TRIGGER` 后，在 RViz **2D Nav Goal** 按住左键拖出箭头并松开，即可开始自主探索。点击位置仅作启动信号，后续目标由 FUEL 选择。
 
 停止探索并锁定当前位置悬停：

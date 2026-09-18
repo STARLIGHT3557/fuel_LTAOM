@@ -52,7 +52,14 @@ void UAV_controller::stateCallback(const prometheus_msgs::UAVState::ConstPtr& ms
   yaw_ = std::atan2(2 * (q.w()*q.z() + q.x()*q.y()), 1 - 2 * (q.y()*q.y() + q.z()*q.z()));
   have_state_ = true;
   state_time_ = ros::Time::now();
-  if (!have_hold_) hold();
+  const bool valid = msg->connected && msg->odom_valid;
+  const bool offboard = valid && msg->armed && msg->mode == "OFFBOARD";
+  // Before OFFBOARD, stream the measured pose rather than an old ground/exit
+  // target. On entry, latch the current pose once; while active, keep that
+  // target fixed until a new command arrives. Handle the edge here so a Move
+  // received after this state update is not overwritten by the main loop.
+  if (valid && (!have_hold_ || !offboard || !was_offboard_)) hold();
+  was_offboard_ = offboard;
 }
 
 void UAV_controller::commandCallback(const Command::ConstPtr& msg) {
@@ -79,7 +86,12 @@ void UAV_controller::commandCallback(const Command::ConstPtr& msg) {
         msg->position_ref[i] > fence_max_[i]) return;
   }
   if (!std::isfinite(msg->yaw_ref)) return;
-  if (msg->Move_mode == Command::TRAJECTORY_ATTITUDE && (!uav_state.armed || uav_state.mode != "OFFBOARD")) return;
+  // Do not queue position or trajectory targets while another PX4 mode owns
+  // the aircraft. A fresh Move command is required after entering OFFBOARD.
+  if (!was_offboard_) {
+    ROS_WARN_THROTTLE(2, "Move rejected: arm and enter OFFBOARD before sending a target");
+    return;
+  }
   command_ = *msg;
   command_time_ = ros::Time::now();
 }
@@ -98,9 +110,7 @@ void UAV_controller::mainloop() {
     landing_ = true;
     failsafe_ = true;
   }
-  // A manual mode change cancels the old trajectory. Re-entering OFFBOARD holds.
-  if (was_offboard_ && !offboard) hold();
-  was_offboard_ = offboard;
+  // Mode transitions and the hover latch are updated in stateCallback().
   if (!offboard) resetThrustMapping();
   else estimateThrustStopFlag = false;
 

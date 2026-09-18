@@ -24,7 +24,8 @@ class ControllerTest(unittest.TestCase):
         self.armed = False
         self.mode = 'POSCTL'
         self.pose_enabled = True
-        self.position = [0.0, 0.0, 1.5]
+        self.position = [0.0, 0.0, 0.0]
+        self.yaw = 0.0
         self.local = self.att = self.control = self.state = self.mesh = self.odom = None
         self.local_count = self.att_count = 0
         self.land_requests = []
@@ -66,7 +67,9 @@ class ControllerTest(unittest.TestCase):
                 pubs['vel'].publish(vel)
                 imu = Imu()
                 imu.header.stamp = stamp
-                imu.orientation.w = 1
+                yaw = self.yaw
+                imu.orientation.z = math.sin(yaw / 2)
+                imu.orientation.w = math.cos(yaw / 2)
                 imu.linear_acceleration.z = 9.81
                 pubs['imu'].publish(imu)
                 pubs['gps'].publish(GPSRAW(fix_type=3, satellites_visible=12))
@@ -90,11 +93,56 @@ class ControllerTest(unittest.TestCase):
             wait(lambda: self.mesh is not None and self.odom is not None)
             self.assertEqual(self.odom.header.frame_id, 'world')
             self.assertEqual(self.mesh.mesh_resource, 'package://prometheus_uav_control/meshes/hummingbird.mesh')
+            # Start on the ground, then take off using another flight mode.
+            # OFFBOARD pre-streaming must follow the latest measured pose,
+            # rather than retain the ground-level initialization target.
+            self.armed = True
+            self.position = [0.0, 0.0, 1.5]
+            self.yaw = 0.4
+            wait(lambda: abs(self.state.position[2] - 1.5) < 1e-5 and
+                 abs(self.state.attitude[2] - 0.4) < 1e-5)
+            time.sleep(0.1)
+            self.assertAlmostEqual(self.local.position.z, 1.5, places=5,
+                                   msg='OFFBOARD pre-stream retained the ground height')
+            self.assertAlmostEqual(self.local.yaw, 0.4, places=5)
+            self.mode = 'OFFBOARD'
+            wait(lambda: self.control.control_state == UAVControlState.COMMAND_CONTROL)
+            self.position = [0.2, 0.1, 1.7]
+            self.yaw = 0.7
+            wait(lambda: abs(self.state.position[2] - 1.7) < 1e-5)
+            time.sleep(0.1)
+            self.assertAlmostEqual(self.local.position.z, 1.5, places=5)
+            self.assertAlmostEqual(self.local.yaw, 0.4, places=5)
+
             pos = UAVCommand(Agent_CMD=UAVCommand.Move, Move_mode=UAVCommand.XYZ_POS)
             pos.position_ref = [0, 0, 2]
             send(pos)
             self.assertAlmostEqual(self.local.position.z, 2)
-            self.armed = True
+
+            # Leave OFFBOARD with an explicit old target, move elsewhere, then
+            # re-enter. Neither the old target nor the exit pose may be resumed.
+            self.mode = 'POSCTL'
+            wait(lambda: self.control.control_state == UAVControlState.INIT)
+            self.position = [0.8, -0.5, 2.5]
+            self.yaw = -0.6
+            wait(lambda: abs(self.state.position[2] - 2.5) < 1e-5 and
+                 abs(self.state.attitude[2] + 0.6) < 1e-5)
+            send(pos)  # Movement commands outside OFFBOARD must not preload a target.
+            self.assertAlmostEqual(self.local.position.z, 2.5, places=5)
+            self.mode = 'OFFBOARD'
+            wait(lambda: self.control.control_state == UAVControlState.COMMAND_CONTROL)
+            self.assertAlmostEqual(self.local.position.x, 0.8, places=5)
+            self.assertAlmostEqual(self.local.position.y, -0.5, places=5)
+            self.assertAlmostEqual(self.local.position.z, 2.5, places=5)
+            self.assertAlmostEqual(self.local.yaw, -0.6, places=5)
+
+            # Return to the known pose for the numerical tracking checks below.
+            self.mode = 'POSCTL'
+            wait(lambda: self.control.control_state == UAVControlState.INIT)
+            self.position = [0.0, 0.0, 1.5]
+            self.yaw = 0.0
+            wait(lambda: abs(self.state.position[2] - 1.5) < 1e-5 and
+                 abs(self.state.attitude[2]) < 1e-5)
             self.mode = 'OFFBOARD'
             wait(lambda: self.control.control_state == UAVControlState.COMMAND_CONTROL)
             track = UAVCommand(Agent_CMD=UAVCommand.Move, Move_mode=UAVCommand.TRAJECTORY_ATTITUDE)
