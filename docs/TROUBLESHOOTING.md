@@ -11,11 +11,11 @@ FUEL 负责前沿搜索、探索目标选择和轨迹规划；Gazebo、PX4、MAV
 ```mermaid
 flowchart LR
     G[Gazebo MID360] -->|/livox/lidar_mapping| B[FUEL 桥接节点]
-    O[Prometheus 局部里程计] --> B
+    O[MAVROS 本地里程计] --> B
     B -->|世界坐标射线与雷达位姿| F[FUEL 建图与探索规划]
     F --> T[B 样条轨迹服务器]
     T -->|/fuel/position_cmd| B
-    B -->|UAVCommand| C[Prometheus 控制器]
+    B -->|TrajectorySetpoint| C[uav_controller]
     C --> M[MAVROS / PX4]
     M --> G
     R[RViz 2D Nav Goal] -->|启动探索| B
@@ -29,11 +29,11 @@ flowchart LR
 
 ### 现在使用什么控制器
 
-FUEL 指令固定为 `TRAJECTORY_ATTITUDE`（9），调用 [uav_controller.cpp](../src/uav_control/src/uav_controller.cpp) 的 `send_att_thrust_setpoint()`，用位置/速度误差反馈及加速度前馈计算姿态和推力，再发送到 PX4 姿态控制链路。增益 `kp=[8,8,12]`、`kv=[4,4,5]`、反馈加速度限幅 8 m/s²、RLS 推力估计和推力偏置保持原值。
+当前使用 `src/uav_controller` 的 `ros1` 分支。FUEL 桥接把 `/fuel/position_cmd` 直接转换为 `/uav_controller/trajectory_setpoint`，控制器按位置、速度反馈及加速度前馈计算姿态和推力，并通过 `/uav1/mavros/setpoint_raw/attitude` 发送给 PX4。
 
-控制器另保留 `XYZ_POS`（0）起飞/定点、悬停及降落。其他位置控制器和移动模式已移除；消息中的旧枚举保留以维持接口兼容，不代表仍支持这些功能。
+FUEL 专用配置 [uav_controller_p600.yaml](../src/fuel_bridge/config/uav_controller_p600.yaml) 启用 `fsm/direct_trajectory`，使用 P600 增益 `k_pos=[8,8,12]`、`k_vel=[4,4,5]` 和悬停油门 `0.258`。空中切入 OFFBOARD 后先锁定当前位置；FUEL 轨迹到达后开始跟踪；停止或超时后回到固定点悬停。
 
-重构前，主循环会无条件覆盖为 `COMMAND_CONTROL`，掩盖降落状态；悬停发送函数还会每帧覆盖目标。现已改为解锁且 OFFBOARD、定位有效才发布 `COMMAND_CONTROL`，停止时锁定一次悬停点，降落保持到上锁。定位或状态超时触发保护；断联时停止外部设定值，由 PX4 处理链路丢失。轨迹超时请求定点悬停。
+状态接口为 `/uav_controller/fsm_status`，定位直接使用 `/uav1/mavros/local_position/odom`。旧 `prometheus_uav_control`、`UAVCommand` 控制链和独立状态适配器已删除。
 
 ## 2. OctoMap 节点无法启动
 
@@ -93,7 +93,7 @@ z = 0.23 + 0.05 × cos(0.35) = 0.2769686356 m
 
 ```bash
 rostopic echo -n 1 /livox/lidar_mapping/header
-rostopic echo -n 1 /uav1/prometheus/odom/header
+rostopic echo -n 1 /uav1/mavros/local_position/odom/header
 rostopic hz /fuel/cloud_world
 ```
 
@@ -113,33 +113,9 @@ Points should not be empty for specified marker type.
 
 规划链路测试已检查所有前沿 `ADD` Marker 的点列表非空。该问题属于可视化消息错误，不能仅凭红色状态判断规划器没有地图。
 
-## 6. RViz 不显示无人机模型
+## 6. RViz 中不再显示旧 hummingbird Marker
 
-### 显示项缺失
-
-[fuel.rviz](../src/fuel_bridge/config/fuel.rviz) 增加了无人机模型 Marker 和里程计显示。模型话题通过 `/fuel/uav_mesh` 重映射到 `/uav1/prometheus/uav_mesh`。
-
-这里显示的是 Prometheus 的 `hummingbird.mesh` 示意模型，不是 Gazebo 中完整的 P600 外观。
-
-### 模型资源包找不到
-
-**报错**：
-
-```text
-Error retrieving file [package://prometheus_uav_control/meshes/hummingbird.mesh]:
-Package [prometheus_uav_control] does not exist
-```
-
-**原因**：旧版本的 FUEL 隔离环境无法查到控制器包；临时环境脚本又因符号链接误算根目录。
-
-**修复**：旧版本用 `readlink -f` 和独立 RViz 环境脚本解决。当前分支把控制器、FUEL 和 RViz 合并到同一个工作空间，删除该隔离脚本，保留模型资源及原 `package://` 地址。现在检查方式为：
-
-```bash
-source source.sh
-rospack find prometheus_uav_control
-```
-
-模型位于 `src/uav_control/meshes/hummingbird.mesh`，是无人机示意模型。
+旧无人机示意模型由 `prometheus_uav_control` 状态适配器发布。替换为新控制器后，该旧包和 mesh Marker 一并删除；FUEL 的点云、轨迹、里程计和探索边界显示不受影响。若需要机体外观，应从 Gazebo 模型另行发布可视化 Marker。
 
 ## 7. 探索范围与 Gazebo 圆柱场不一致
 
@@ -154,7 +130,7 @@ rospack find prometheus_uav_control
 
 局部高度范围为 `[0.5, 2.5]` m，地图分配尺寸为 `48 × 32 × 6` m。当前场景近似满足 `x_local = x_gazebo + 10`，实际定位会有少量估计误差。
 
-[simulation.launch](../src/fuel_bridge/launch/simulation.launch) 根据 `spawn_x/spawn_y` 换算默认边界，桥接节点发布黄色边界框 `/fuel/exploration_bounds`，并拒绝越界启动或轨迹指令。边界包含西侧入口，因此并非紧贴圆柱外缘的轮廓。
+[simulation.launch](../src/fuel_bridge/launch/simulation.launch) 根据 `spawn_x/spawn_y` 换算默认边界，桥接节点发布黄色边界框 `/fuel/exploration_bounds`。启动时当前位置仍需在框内，但运行中的轨迹指令不再由桥接节点做边界拦截。边界包含西侧入口，因此并非紧贴圆柱外缘的轮廓。
 
 原始回波中出现框外物体是传感器正常观测，不代表 FUEL 在选择框外目标。应结合黄色框、前沿和规划轨迹判断。
 
@@ -170,8 +146,8 @@ rospack find prometheus_uav_control
 
 启动前必须满足：
 
-- 定位、点云和控制状态足够新，控制状态为 `COMMAND_CONTROL` 且无 failsafe。
-- 无人机处于探索框内，高度至少 0.8 m，速度不超过 0.3 m/s。
+- 定位、点云和控制状态足够新，控制器状态为 `HOLD` 或 `TRAJECTORY`、`feedback_ready=true` 且输出策略为 `CLOSED_LOOP`。
+- 无人机当前位置处于探索框内；启动不再限制当前高度和速度。
 - FUEL 已订阅建图输入和触发话题。
 
 不满足时会看到 `RViz 2D Nav Goal did not start exploration: ...`。满足条件后重新点击即可。测试已验证无需调用启动服务也能触发，重复点击不会重启正在进行的探索。
@@ -219,7 +195,7 @@ rospack find prometheus_uav_control
 
 FUEL 的任务是观测未知空间，不要求机体飞过每个网格。中心若已被周围扫描覆盖，可以不飞进去；如果目标是逐行覆盖或巡检每处位置，需要另行设计覆盖任务。
 
-当前 RViz 的 `Travel` 来自轨迹服务器发布的历史命令位置（`traj_cmd_`），不是实际里程计轨迹。判断飞机实际是否绕圈或跟踪偏离，应结合 `/uav1/prometheus/odom`，不能只看蓝色历史命令线。
+当前 RViz 的 `Travel` 来自轨迹服务器发布的历史命令位置（`traj_cmd_`），不是实际里程计轨迹。判断飞机实际是否绕圈或跟踪偏离，应结合 `/uav1/mavros/local_position/odom`，不能只看蓝色历史命令线。
 
 另一方面，仅看到中心的圆柱点云，不等于周围自由空间全部已知。应区分：目标持续改变但地图有进展、目标长期残留且地图无进展，以及规划轨迹正常但实际飞机跟踪偏离。第三种情况要检查控制跟踪，不能靠前沿参数解决。
 
@@ -279,23 +255,15 @@ bash fuel_simulation.sh
 
 等待 PX4 连接、点云和地图出现。FUEL 应在起飞前运行，以记录起飞过程中扫描到的自由空间。
 
-终端二，加载消息环境，切换 OFFBOARD 并解锁：
+在 QGroundControl 中解锁并手动起飞到约 1.2 m，稳定后切换到 OFFBOARD。终端中可确认：
 
 ```bash
 source source.sh
-rosservice call /uav1/mavros/set_mode "{base_mode: 0, custom_mode: 'OFFBOARD'}"
-rosservice call /uav1/mavros/cmd/arming "{value: true}"
 rostopic echo -n 1 /uav1/mavros/state
+rostopic echo -n 1 /uav_controller/fsm_status
 ```
 
-确认实际状态为 `OFFBOARD`、`armed: True` 后，发送局部坐标下出生点上方约 1.5 m 的目标：
-
-```bash
-rostopic pub -1 /uav1/prometheus/command prometheus_msgs/UAVCommand \
-  "{Agent_CMD: 4, Move_mode: 0, position_ref: [0.0, 0.0, 1.5], yaw_ref: 0.0, Command_ID: 1}"
-```
-
-等待稳定悬停后，在 RViz 用 **2D Nav Goal** 拖出箭头并松开。需要停止探索时：
+控制器进入 `HOLD` 且输出策略为 `CLOSED_LOOP` 后，在 RViz 用 **2D Nav Goal** 拖出箭头并松开。需要停止探索时：
 
 ```bash
 rosservice call /fuel/stop "{}"
@@ -308,7 +276,7 @@ rosservice call /fuel/stop "{}"
 | 项目 | 已验证的内容 | 结论范围 |
 | --- | --- | --- |
 | 环境与模型资源（旧版本） | 通过符号链接入口加载原工作空间，读取 mesh | 现已合并工作空间，验证记录见重构说明 |
-| `bridge.test` | 外参转换、点过滤、无回波端点保留与显示过滤、点击触发、超时和越界处理 | 合成消息下接口测试通过 |
+| `bridge.test` | 外参转换、点过滤、无回波端点保留与显示过滤、点击触发、超时、低高度与高速度启动以及越界轨迹转发 | 合成消息下接口测试通过 |
 | `frontier_boundary.test` | 框外假前沿、框内前沿保留与移除、最大量程清图、雷达观察原点 | 4 个测试通过 |
 | `planner.test` | 合成起飞扫描下生成地图、前沿、B 样条与控制指令，Marker 有效、轨迹控制点在框内 | 规划链路测试通过，不含飞行动力学 |
 | 无界面 Gazebo 雷达测试 | 使用实际插件生成真实墙面回波和无回波射线，核对 frame 与时间戳 | 已通过单独的雷达场景测试 |
@@ -342,28 +310,20 @@ rosparam get /exploration_node/sdf_map
 ```bash
 rosbag record -O fuel_exploration_debug.bag \
   /clock /rosout /livox/lidar_mapping /fuel/cloud_world /fuel/sensor_pose \
-  /uav1/prometheus/odom /uav1/prometheus/control_state \
-  /fuel/position_cmd /uav1/prometheus/command /planning/bspline /sdf_map/occupancy_all \
+  /uav1/mavros/local_position/odom /uav_controller/fsm_status \
+  /fuel/position_cmd /uav_controller/trajectory_setpoint /planning/bspline /sdf_map/occupancy_all \
   /planning_vis/frontier /planning_vis/trajectory /planning/travel_traj
 ```
 
 后续应同时比较前沿是否减少、期望轨迹是否重复、实际位置与期望位置是否一致，以及中心区域是否仍存在未观测空间，再决定调整探索策略还是控制跟踪。
 
-## 14. 空中切入 OFFBOARD 时掉高度
+## 14. 空中切入 OFFBOARD 时的悬停目标
 
-**现象**：用其他模式起飞后，刚切入 OFFBOARD 就下降，尚未点击探索。
+新控制器在非 OFFBOARD 阶段持续用最新有效状态更新参考点。无人机由 QGroundControl 手动起飞后切入 OFFBOARD，会在切换位置进入 `HOLD`，不会恢复地面旧高度；收到 FUEL 的新鲜 `TrajectorySetpoint` 后才进入 `TRAJECTORY`。
 
-**原因**：第一次重构把悬停目标改为锁定位置，但遗漏了模式切入时的更新。控制器首次收到状态通常在地面，此时锁定的高度一直保留；退出 OFFBOARD 后再飞到另一高度，也可能保留退出时的旧目标。切回时 PX4 收到的是较低的旧位置目标。
-
-**修复**：[控制器](../src/uav_control/src/uav_controller.cpp) 在其他模式下，用最新有效位置和朝向预发送设定值；解锁并切入 OFFBOARD 时锁定当前目标。切入后保持固定目标，避免悬停点跟随漂移。切换处理放在状态回调中，避免主循环覆盖切入后新收到的合法指令。其他模式下的 Move 指令不再预存，进入 OFFBOARD 后需重新发送。
-
-此次没有调整反馈增益、悬停推力或 FUEL 参数。已补充“地面初始化→其他模式起飞→空中切入→悬停期间漂移→退出后改变高度/朝向→再次切入”的控制器回归场景。原短程仿真验收采用先进入 OFFBOARD 再发送起飞目标的流程，未覆盖这条空中切入路径。
-
-重新编译控制器后，关闭旧仿真并重新启动才能加载新程序：
+停止探索或轨迹超时后，控制器锁定一次当前位置继续悬停。再次启动探索时，新轨迹可从 `HOLD` 重新接管，无需重启节点。重新编译并启动：
 
 ```bash
-bash compile_fuel.sh uav_control_main
+bash compile_fuel.sh
 bash fuel_simulation.sh
 ```
-
-已经在空中时，切换成功即可在切换位置悬停；不要再次发送地面起飞流程中的固定 1.5 m 目标，除非确实需要飞到该高度。

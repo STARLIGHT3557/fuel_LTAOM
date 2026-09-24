@@ -60,7 +60,7 @@ Visualization Manager:
     - Class: rviz/Odometry
       Name: UAV odometry
       Enabled: true
-      Topic: /uav1/prometheus/odom
+      Topic: /uav1/mavros/local_position/odom
       Keep: 1
   Tools:
     - Class: rviz/Interact

@@ -10,8 +10,8 @@
 | --- | --- |
 | `build/fuel_upstream` 下载的 FUEL | 完整源码纳入 `third_party/FUEL/`，1538 个上游文件全部保留，原修复直接合入 |
 | `Modules/fuel_bridge` | `src/fuel_bridge` |
-| `Modules/uav_control` | `src/uav_control`，保留实际轨迹控制计算及 GPS 状态适配 |
-| `Modules/common` | `src/messages`，仅保留 UAVCommand/UAVState/UAVControlState/PositionCommand；保留使用中消息的原定义 |
+| `Modules/uav_control` | 由 `src/uav_controller` 的 `ros1` 分支替换，FUEL 使用直连轨迹模式 |
+| `Modules/common` | `src/messages` 保留现有消息定义；FUEL 控制链只使用 `PositionCommand` |
 | `Simulator/gazebo_simulator` | `src/gazebo_simulator`，仅保留 P600、MID360、GPS、圆柱世界及引用资源 |
 | `Simulator/livox_laser_gazebo_plugins` | `src/livox_laser_gazebo_plugins`，只保留实际使用的 PointCloud2 XYZ 和建图射线输出 |
 | SUPER、EGO、FAST_LIO、通信、Experiment、旧 Scripts | 删除 |
@@ -23,17 +23,11 @@
 
 ## 控制行为
 
-保留 `TRAJECTORY_ATTITUDE`（9）的原始数值计算：位置/速度反馈、8 m/s² 反馈限幅、加速度前馈、姿态转换、35–45 ms 数据窗口的 RLS 推力估计、0.01 推力偏置及 [原增益](../src/uav_control/config/p600.yaml)。保留 `XYZ_POS`（0）定点起飞、悬停及降落，其余控制算法/移动模式删除。
+FUEL 的 `quadrotor_msgs/PositionCommand` 由桥接节点直接转换为 `uav_controller/TrajectorySetpoint`。新控制器使用 ROS 1/MAVROS 接口，几何控制仍按位置、速度反馈与加速度前馈计算姿态和推力；P600 集成参数位于 [uav_controller_p600.yaml](../src/fuel_bridge/config/uav_controller_p600.yaml)。
 
-清理时修正两处旧状态处理错误，并为输入补上新鲜度检查：
+FUEL 启用 `fsm/direct_trajectory`：无人机在空中切入 OFFBOARD 时先锁定当前位置进入 `HOLD`；新鲜轨迹到达后进入 `TRAJECTORY`；`/fuel/stop`、规划超时或轨迹超时后锁定位置回到 `HOLD`。之后可再次触发探索。状态失效时停止输出，由 PX4 处理 offboard 链路丢失。
 
-- 旧主循环无条件写入 `COMMAND_CONTROL`，覆盖降落/保护状态。现在只有解锁、OFFBOARD 且定位有效时进入指令控制，降落状态保持到上锁。
-- 旧悬停发送函数每帧用当前位置覆盖目标。现在触发停止时锁定位置和朝向，后续保持这个固定目标。
-- 轨迹中断超过 0.5 s 请求悬停。状态/定位失效或越过控制器围栏触发保护；失去连接后停止设定值，由 PX4 自身处理链路丢失。
-- PX4 改为其他飞行模式时取消旧轨迹。非 OFFBOARD 阶段的预发送目标跟随最新有效位置和朝向，切入 OFFBOARD 时锁定一次当前目标；进入后固定悬停，不恢复旧轨迹或旧高度。位置/轨迹 Move 指令只在解锁且进入 OFFBOARD 后接受。
-- GPS/位置/速度/IMU 必须持续更新，失效时不再发布伪装成新数据的里程计。世界到机体、雷达射线原点 TF 与当前模型外参一致。
-
-消息的旧枚举仍保留，以保持原 MD5 和类型兼容；未使用的枚举不表示功能仍可用。控制状态中的历史 `pos_controller=0` 同样保留，其轨迹模式 9 的实际算法见上文。
+定位改用 MAVROS 原生 `/uav1/mavros/local_position/odom`。MAVROS 局部坐标帧配置为 `world`，与点云桥接和 FUEL 一致。旧 `prometheus_uav_control` 包及 UAVCommand 控制链已删除。
 
 ## 可移植性
 
@@ -46,14 +40,14 @@ PX4 保持外部依赖，通过 `PX4_ROOT`、`PX4_BUILD_DIR` 配置。启动脚�
 ## 验证
 
 - 从空的 `build/fuel`、`devel/fuel` 完整编译通过；随后构建边界回归可执行文件通过。
-- roslaunch 节点和参数解析通过，启动图只含一个 RViz。模型和控制器包可以在统一环境解析；`resource_retriever` 成功读取 6,365,657 字节的 RViz mesh；共享库检查无缺失项。
-- 完整上游清单核对：1538 个路径全部存在，无嵌套 `.git` 或子模块。
-- `controller.test`：实际状态适配器和控制器，验证起飞位置指令、模式 9 姿态计算、超时悬停、固定悬停点、拒绝已删除模式、降落保持及定位失效保护，通过。
+- roslaunch 节点和参数解析通过，启动图包含 `uav_controller/geometric_controller_node`，不再启动旧控制器。
+- 完整 FUEL 上游清单核对：1538 个路径全部存在。
+- `uav_controller` 核心直连测试验证空中接管、轨迹开始、完成、重启和超时悬停，通过。
 - `bridge.test`：点云转换/过滤、RViz 触发、边界及停止保护，通过。
 - `frontier_boundary.test`：4 个实际地图/前沿回归用例，通过。
 - `planner.test`：实际 FUEL 建图、前沿、B 样条及控制指令链路，通过。
 
-- `scripts/check_simulation.py`：实际 Gazebo/PX4 无界面检查通过，GPS、真实回波/40 m 无回波射线、无人机 Marker、OFFBOARD/解锁、1.5 m 起飞悬停、RViz 2D Nav Goal 话题触发、模式 9 飞行与停止后固定点悬停均通过。探索观察窗口 30 秒墙钟时间，距检查起点最远约 21.28 m；无空前沿 ADD Marker、无控制器 failsafe、停止后不再转发轨迹。日志目录为本机 `/tmp/fuel-simulation-check.efft_orv`（临时文件，不入库）。
-- 首次短程脚本过早请求 OFFBOARD 导致等待超时；脚本增加了 2 秒仿真时间的设定值预发送及模式请求重试后通过。该要求已写入启动说明。
+- `scripts/check_simulation.py`：替换控制器后的 Gazebo/PX4 无界面检查通过；验证 MAVROS 里程计、真实回波/40 m 无回波射线、OFFBOARD/解锁、新控制器自动起飞、RViz 触发、FUEL 轨迹接管及停止悬停。10 秒探索窗口内最远移动 8.62 m，日志目录为 `/tmp/fuel-simulation-check.jz37ocue`（临时文件，不入库）。
+- 无界面脚本在切换 OFFBOARD 前等待 2 秒设定值流，并按新接口检查 `FlightStatus` 和 MAVROS odom。
 
 复现命令见 [根 README](../README.md)。此次实际飞行是短程验收，没有验证整场覆盖、长时间边界行为、所有终止场景或 GUI 渲染画面。规划过程中仍可能出现上游的 NLopt 优化失败重试日志，本次短程检查未因此中断。

@@ -11,8 +11,8 @@
 #include <nav_msgs/Path.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_types.h>
-#include <prometheus_msgs/UAVCommand.h>
-#include <prometheus_msgs/UAVControlState.h>
+#include <uav_controller/FlightStatus.h>
+#include <uav_controller/TrajectorySetpoint.h>
 #include <quadrotor_msgs/PositionCommand.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_msgs/Empty.h>
@@ -31,16 +31,15 @@ class FuelBridge {
   ros::ServiceServer start_srv_, stop_srv_;
   ros::Timer watchdog_;
   nav_msgs::Odometry odom_;
-  prometheus_msgs::UAVControlState state_;
+  uav_controller::FlightStatus state_;
   ros::Time cloud_stamp_, state_stamp_, last_command_, started_;
   Eigen::Vector3d lidar_translation_;
   Eigen::Matrix3d lidar_rotation_;
   Eigen::Vector3d bounds_min_, bounds_max_;
   bool have_bounds_ = false;
   std::string world_frame_, lidar_frame_;
-  double min_range_, data_timeout_, command_timeout_, planning_timeout_, min_altitude_;
+  double min_range_, data_timeout_, command_timeout_, planning_timeout_;
   double no_return_range_;
-  uint32_t command_id_ = 0;
   bool active_ = false;
 
   bool fresh(const ros::Time& stamp, double timeout) const {
@@ -50,8 +49,8 @@ class FuelBridge {
 
   bool ready() const {
     return fresh(odom_.header.stamp, data_timeout_) && fresh(cloud_stamp_, data_timeout_) &&
-           fresh(state_stamp_, data_timeout_) && !state_.failsafe &&
-           state_.control_state == prometheus_msgs::UAVControlState::COMMAND_CONTROL;
+           fresh(state_stamp_, data_timeout_) && state_.feedback_ready && state_.output_policy == "CLOSED_LOOP" &&
+           (state_.phase == "HOLD" || state_.phase == "TRAJECTORY");
   }
 
   bool inBounds(const geometry_msgs::Point& p) const {
@@ -163,11 +162,8 @@ class FuelBridge {
       response.message = "Current position is outside the exploration box shown in RViz. Check local coordinates and takeoff position.";
       return true;
     }
-    const auto& v = odom_.twist.twist.linear;
-    if (!ready() || odom_.pose.pose.position.z < min_altitude_ ||
-        std::hypot(std::hypot(v.x, v.y), v.z) > 0.3 ||
-        trigger_pub_.getNumSubscribers() == 0 || cloud_pub_.getNumSubscribers() == 0) {
-      response.message = "Wait for fresh odometry/cloud, FUEL, and COMMAND_CONTROL hover above minimum altitude.";
+    if (!ready() || trigger_pub_.getNumSubscribers() == 0 || cloud_pub_.getNumSubscribers() == 0) {
+      response.message = "Wait for fresh odometry/cloud, FUEL, and CLOSED_LOOP control.";
       return true;
     }
     nav_msgs::Path trigger;
@@ -188,14 +184,19 @@ class FuelBridge {
   void halt() {
     active_ = false;
     stop_pub_.publish(std_msgs::Empty());
-    // Issue a hover once; continued publishing would repeatedly reset the hover point.
-    if (fresh(state_stamp_, data_timeout_) &&
-        state_.control_state == prometheus_msgs::UAVControlState::COMMAND_CONTROL) {
-      prometheus_msgs::UAVCommand cmd;
+    // Finish the direct trajectory at the measured pose so the controller
+    // enters HOLD without following a stale planner command.
+    if (fresh(state_stamp_, data_timeout_) && state_.feedback_ready &&
+        state_.output_policy == "CLOSED_LOOP") {
+      uav_controller::TrajectorySetpoint cmd;
       cmd.header.stamp = ros::Time::now();
       cmd.header.frame_id = world_frame_;
-      cmd.Command_ID = ++command_id_;
-      cmd.Agent_CMD = prometheus_msgs::UAVCommand::Current_Pos_Hover;
+      cmd.mission_id = state_.mission_id;
+      cmd.position = odom_.pose.pose.position;
+      const auto &q = odom_.pose.pose.orientation;
+      cmd.yaw = std::atan2(2.0 * (q.w*q.z + q.x*q.y),
+                           1.0 - 2.0 * (q.y*q.y + q.z*q.z));
+      cmd.finished = true;
       command_pub_.publish(cmd);
     }
   }
@@ -208,25 +209,16 @@ class FuelBridge {
                         msg->velocity.x, msg->velocity.y, msg->velocity.z,
                         msg->acceleration.x, msg->acceleration.y, msg->acceleration.z,
                         msg->yaw, msg->yaw_dot}) {
-      if (!std::isfinite(value)) { halt(); return; }
+      if (!std::isfinite(value)) return;
     }
-    if (!inBounds(msg->position)) {
-      ROS_ERROR("FUEL trajectory setpoint is outside the exploration box; stopping.");
-      halt();
-      return;
-    }
-    prometheus_msgs::UAVCommand cmd;
+    uav_controller::TrajectorySetpoint cmd;
     cmd.header = msg->header;
-    cmd.Command_ID = ++command_id_;
-    cmd.Agent_CMD = prometheus_msgs::UAVCommand::Move;
-    cmd.Control_Level = prometheus_msgs::UAVCommand::DEFAULT_CONTROL;
-    cmd.Move_mode = prometheus_msgs::UAVCommand::TRAJECTORY_ATTITUDE;
-    cmd.position_ref = {{float(msg->position.x), float(msg->position.y), float(msg->position.z)}};
-    cmd.velocity_ref = {{float(msg->velocity.x), float(msg->velocity.y), float(msg->velocity.z)}};
-    cmd.acceleration_ref = {{float(msg->acceleration.x), float(msg->acceleration.y), float(msg->acceleration.z)}};
-    cmd.yaw_ref = std::atan2(std::sin(msg->yaw), std::cos(msg->yaw));
-    cmd.Yaw_Rate_Mode = false;
-    cmd.yaw_rate_ref = msg->yaw_dot;
+    cmd.mission_id = state_.mission_id;
+    cmd.position = msg->position;
+    cmd.velocity = msg->velocity;
+    cmd.acceleration = msg->acceleration;
+    cmd.yaw = std::atan2(std::sin(msg->yaw), std::cos(msg->yaw));
+    cmd.finished = false;
     command_pub_.publish(cmd);
     last_command_ = msg->header.stamp;
   }
@@ -240,7 +232,6 @@ public:
     pnh_.param("data_timeout", data_timeout_, 0.5);
     pnh_.param("command_timeout", command_timeout_, 0.5);
     pnh_.param("planning_timeout", planning_timeout_, 10.0);
-    pnh_.param("min_start_altitude", min_altitude_, 0.8);
     double roll, pitch, yaw;
     pnh_.param("lidar_x", lidar_translation_.x(), 0.13);
     pnh_.param("lidar_y", lidar_translation_.y(), 0.0);
@@ -255,7 +246,7 @@ public:
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_world", 2);
     hits_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_hits_world", 2);
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("sensor_pose", 2);
-    command_pub_ = nh_.advertise<prometheus_msgs::UAVCommand>("command", 10);
+    command_pub_ = nh_.advertise<uav_controller::TrajectorySetpoint>("command", 10);
     trigger_pub_ = nh_.advertise<nav_msgs::Path>("trigger", 1);
     stop_pub_ = nh_.advertise<std_msgs::Empty>("stop_planner", 1);
     cloud_sub_.subscribe(nh_, "cloud", 5);
@@ -267,9 +258,9 @@ public:
         [this](const nav_msgs::OdometryConstPtr& msg) {
           if (msg->header.frame_id == world_frame_) odom_ = *msg;
         });
-    state_sub_ = nh_.subscribe<prometheus_msgs::UAVControlState>("control_state", 10,
-        [this](const prometheus_msgs::UAVControlStateConstPtr& msg) {
-          // The existing controller leaves UAVControlState.header unset.
+    state_sub_ = nh_.subscribe<uav_controller::FlightStatus>("control_state", 10,
+        [this](const uav_controller::FlightStatusConstPtr& msg) {
+          // Receipt time is authoritative; tests and relays may leave the header unset.
           state_ = *msg; state_stamp_ = ros::Time::now();
         });
     command_sub_ = nh_.subscribe("position_cmd", 10, &FuelBridge::commandCallback, this);
@@ -295,7 +286,7 @@ public:
         halt();
       }
     });
-    ROS_INFO("FUEL bridge ready. Take off and hover in COMMAND_CONTROL, then click and drag RViz 2D Nav Goal to start exploration.");
+    ROS_INFO("FUEL bridge ready. Take off and hover in CLOSED_LOOP, then click and drag RViz 2D Nav Goal to start exploration.");
   }
 };
 

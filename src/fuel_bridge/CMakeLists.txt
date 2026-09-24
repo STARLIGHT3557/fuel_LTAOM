@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(prometheus_fuel)
 add_compile_options(-std=c++14 -Wall -Wextra)
 find_package(catkin REQUIRED COMPONENTS roscpp nav_msgs sensor_msgs geometry_msgs
-  std_msgs std_srvs visualization_msgs message_filters pcl_ros pcl_conversions prometheus_msgs quadrotor_msgs active_perception)
+  std_msgs std_srvs visualization_msgs message_filters pcl_ros pcl_conversions uav_controller quadrotor_msgs active_perception)
 find_package(Eigen3 REQUIRED)
 catkin_package()
 include_directories(${catkin_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS})

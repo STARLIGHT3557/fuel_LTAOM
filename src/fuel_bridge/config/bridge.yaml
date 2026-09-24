@@ -13,7 +13,6 @@ min_range: 0.6
 # Simulation mapping stream encodes a no-hit ray at the sensor's 40 m limit.
 # These endpoints go to FUEL but are omitted from the RViz returns display.
 no_return_range: 40.0
-min_start_altitude: 0.8
 data_timeout: 0.5
 command_timeout: 0.5
 planning_timeout: 10.0

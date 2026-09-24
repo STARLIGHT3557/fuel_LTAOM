@@ -7,8 +7,8 @@ fuel_test_dir=$(mktemp -d /tmp/fuel-tests.XXXXXX)
 export ROS_HOME="$fuel_test_dir/home"
 export ROS_LOG_DIR="$fuel_test_dir/log"
 export FUEL_TSP_DIR="$fuel_test_dir/tsp"
-mkdir -p "$ROS_LOG_DIR" "$FUEL_TSP_DIR" "$ROS_HOME/test_results/prometheus_fuel" "$ROS_HOME/test_results/prometheus_uav_control"
-rostest prometheus_uav_control controller.test
+mkdir -p "$ROS_LOG_DIR" "$FUEL_TSP_DIR" "$ROS_HOME/test_results/prometheus_fuel" "$ROS_HOME/test_results/uav_controller"
+rostest uav_controller position_step_ros.test
 rostest prometheus_fuel frontier_boundary.test
 rostest prometheus_fuel bridge.test
 rostest prometheus_fuel planner.test

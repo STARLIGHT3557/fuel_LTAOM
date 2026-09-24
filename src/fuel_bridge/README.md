@@ -62,17 +62,16 @@ rosservice call /fuel/stop "{}"
 
 | 接口 | 默认话题 / 类型 |
 | --- | --- |
-| 定位 | `/uav1/prometheus/odom`，`nav_msgs/Odometry` |
+| 定位 | `/uav1/mavros/local_position/odom`，`nav_msgs/Odometry` |
 | 原始点云 | `/livox/lidar`，`sensor_msgs/PointCloud2`，`uav1/lidar_link` 坐标系 |
 | 仿真建图输入（默认） | `/livox/lidar_mapping`，真实回波及 40 m 无回波射线端点 |
 | RViz 真实回波 | `/fuel/cloud_hits_world`，不显示无回波端点 |
 | 转换后的建图射线与传感器位姿 | `/fuel/cloud_world`、`/fuel/sensor_pose`，相同时间戳、`world` 坐标系 |
 | FUEL 轨迹指令 | `/fuel/position_cmd`，本工程的 `quadrotor_msgs/PositionCommand` |
-| 飞控指令 | `/uav1/prometheus/command`，`prometheus_msgs/UAVCommand` |
-| 控制状态 | `/uav1/prometheus/control_state` |
+| 控制器轨迹输入 | `/uav_controller/trajectory_setpoint`，`uav_controller/TrajectorySetpoint` |
+| 控制状态 | `/uav_controller/fsm_status`，`uav_controller/FlightStatus` |
 | FUEL 地图、前沿 | `/sdf_map/occupancy_all`、`/planning_vis/frontier` |
 | 探索边界框 | `/fuel/exploration_bounds`，黄色线框，局部定位坐标系 |
-| 无人机示意模型 | `/uav1/prometheus/uav_mesh`（RViz 中通过 `/fuel/uav_mesh` 重映射） |
 
 `config/bridge.yaml` 设置传感器外参、滤波和超时。实际加载的模型是本工程 `src/gazebo_simulator/gazebo_models/uav_models/p600_mid360/p600_mid360.sdf.jinja`。其中雷达安装位置为 `(0.13, 0, 0.23)` m、俯仰角为 `0.35 rad`；叠加雷达局部 z 轴上 `0.05 m` 的射线原点偏移后，桥接外参为 `(0.1471448904, 0, 0.2769686356)` m、俯仰角 `0.35 rad`。修改模型后必须同步修改桥接外参及 `mid360.yaml` 中的雷达位置和安装角；候选观察点的视场、遮挡射线均从实际雷达位置计算。输入必须是雷达局部坐标点云，不能将世界坐标点云再次送入转换。同步时间差上限为 50 ms；桥接节点剔除非有限点和 0.6 m 内点，过滤旧话题的零距离点及机体点。
 
@@ -80,7 +79,7 @@ rosservice call /fuel/stop "{}"
 
 原 `/livox/lidar` 保持原有输出。对照实验使用仅有真实回波的旧话题时可传 `cloud_topic:=/livox/lidar`，但无法凭丢失的射线方向清除无回波区域，不能把零点当作远距离自由空间。
 
-`config/mid360.yaml` 设置 0.2 m 地图分辨率、0.4 m 障碍膨胀、10 m 建图射线范围及 MID360 360° 水平、约 -7°～53° 垂直视场。桥接固定发送 `TRAJECTORY_ATTITUDE`（9）；精简控制器已删除其他轨迹模式。
+`config/mid360.yaml` 设置 0.2 m 地图分辨率、0.4 m 障碍膨胀、10 m 建图射线范围及 MID360 360° 水平、约 -7°～53° 垂直视场。桥接将 FUEL 的位置、速度、加速度和 yaw 直接转换为新控制器的 `TrajectorySetpoint`；`config/uav_controller_p600.yaml` 启用 `direct_trajectory`，并保留 P600 已验证的增益与悬停油门。
 
 默认地图分配尺寸为 48×32×6 m，探索区域按 `planning_easy2.world` 的圆柱场及西侧起飞入口设置。圆柱中心约覆盖 Gazebo x ∈ [-6.89, 11.00]、y ∈ [-9.87, 8.38] m；包含圆柱半径、周边余量和出生点后的探索矩形为：
 
@@ -91,7 +90,7 @@ rosservice call /fuel/stop "{}"
 
 探索高度使用局部定位 z ∈ [0.5, 2.5] m。PX4 局部原点在出生点附近，因此当前场景满足 `x_local ≈ x_gazebo + 10`、`y_local ≈ y_gazebo`，有少量估计误差。虽然消息中的坐标系名称都是 `world`，Gazebo 真值与 Prometheus 定位的数值原点不同，不能直接混用。
 
-`simulation.launch` 中 `spawn_x/spawn_y` 同时控制出生位置和默认边界换算；`box_min/max_*` 参数仍然是局部定位坐标。黄色框表示前沿搜索及轨迹优化范围，范围外的轨迹指令会被桥接节点拒绝并请求悬停。启动探索时当前悬停位置也必须在框内。默认保持原出生点，允许沿入口飞入圆柱区。
+`simulation.launch` 中 `spawn_x/spawn_y` 同时控制出生位置和默认边界换算；`box_min/max_*` 参数仍然是局部定位坐标。黄色框表示前沿搜索及轨迹优化范围。桥接节点不再拦截范围外的轨迹指令，运行边界由 FUEL 规划参数负责；启动探索时当前位置仍必须在框内。默认保持原出生点，允许沿入口飞入圆柱区。
 
 原始 `MID360 world cloud` 会显示传感器看到的框外物体，这些点不代表框外探索目标；可关闭该显示项，仅查看框内的 `FUEL occupancy`。调整边界时应使其位于地图分配范围内，例如：
 
@@ -141,7 +140,7 @@ src/fuel_bridge/scripts/fuel_env.sh rostest prometheus_fuel frontier_boundary.te
 src/fuel_bridge/scripts/fuel_env.sh rostest prometheus_fuel planner.test
 ```
 
-接口测试使用合成 ROS 消息，验证旋转和平移外参、点过滤、时间戳配对、探索触发门控、轨迹字段与递增命令编号、轨迹中断悬停、边界框几何、越界拒绝及停止后不再转发。它不等同于 Gazebo/PX4 闭环飞行验收。
+接口测试使用合成 ROS 消息，验证旋转和平移外参、点过滤、时间戳配对、探索触发门控、轨迹字段与递增命令编号、轨迹中断悬停、边界框几何、越界轨迹转发、低高度与高速度启动、无效数值消息忽略及停止后不再转发。它不等同于 Gazebo/PX4 闭环飞行验收。
 
 边界回归测试使用实际 SDF 地图和前沿搜索器，验证框内全部观测后不再追逐框外未知区域，以及框内未知区域被观测前后前沿的保留与移除；同时验证最大量程射线只清除有限范围自由空间、可见性从雷达安装位置计算。
 

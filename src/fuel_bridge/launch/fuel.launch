@@ -1,6 +1,6 @@
 <launch>
   <arg name="uav_id" default="1"/>
-  <arg name="odom_topic" default="/uav$(arg uav_id)/prometheus/odom"/>
+  <arg name="odom_topic" default="/uav$(arg uav_id)/mavros/local_position/odom"/>
   <arg name="cloud_topic" default="/livox/lidar_mapping"/>
   <arg name="lidar_frame" default="uav$(arg uav_id)/lidar_link"/>
   <arg name="map_size_x" default="48.0"/>
@@ -58,15 +58,14 @@
       <param name="box_max_z" value="$(arg box_max_z)"/>
       <remap from="odom" to="$(arg odom_topic)"/>
       <remap from="cloud" to="$(arg cloud_topic)"/>
-      <remap from="control_state" to="/uav$(arg uav_id)/prometheus/control_state"/>
-      <remap from="command" to="/uav$(arg uav_id)/prometheus/command"/>
+      <remap from="control_state" to="/uav_controller/fsm_status"/>
+      <remap from="command" to="/uav_controller/trajectory_setpoint"/>
       <remap from="trigger" to="/waypoint_generator/waypoints"/>
       <remap from="goal" to="/move_base_simple/goal"/>
     </node>
   </group>
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="fuel_rviz"
         args="-d $(find prometheus_fuel)/config/fuel.rviz">
-    <remap from="/fuel/uav_mesh" to="/uav$(arg uav_id)/prometheus/uav_mesh"/>
-    <remap from="/uav1/prometheus/odom" to="$(arg odom_topic)"/>
+    <remap from="/uav1/mavros/local_position/odom" to="$(arg odom_topic)"/>
   </node>
 </launch>

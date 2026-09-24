@@ -48,9 +48,10 @@ def main():
         import rospy
         import rosgraph
         from geometry_msgs.msg import PoseStamped
+        from mavros_msgs.msg import State
         from mavros_msgs.srv import CommandBool, SetMode
         from nav_msgs.msg import Odometry
-        from prometheus_msgs.msg import UAVCommand, UAVState, UAVControlState
+        from uav_controller.msg import FlightStatus, TrajectorySetpoint
         from sensor_msgs.msg import PointCloud2
         from sensor_msgs import point_cloud2
         from std_srvs.srv import Trigger
@@ -75,23 +76,23 @@ def main():
         def remember(key, msg):
             latest[key] = msg
         def command(msg):
-            if msg.Agent_CMD == UAVCommand.Move and msg.Move_mode == UAVCommand.TRAJECTORY_ATTITUDE:
+            if not msg.finished:
                 commands.append(msg)
         def marker(msg):
             if msg.action == Marker.ADD and not msg.points:
                 frontier_errors.append(msg)
         subscriptions = [rospy.Subscriber(topic, cls, lambda msg, k=key: remember(k, msg), queue_size=1)
                          for key, topic, cls in [
-                             ('state', '/uav1/prometheus/state', UAVState),
-                             ('control', '/uav1/prometheus/control_state', UAVControlState),
-                             ('odom', '/uav1/prometheus/odom', Odometry),
+                             ('state', '/uav1/mavros/state', State),
+                             ('control', '/uav_controller/fsm_status', FlightStatus),
+                             ('odom', '/uav1/mavros/local_position/odom', Odometry),
                              ('mapping', '/livox/lidar_mapping', PointCloud2),
-                             ('hits', '/fuel/cloud_hits_world', PointCloud2),
-                             ('mesh', '/uav1/prometheus/uav_mesh', Marker)]]
-        subscriptions += [rospy.Subscriber('/uav1/prometheus/command', UAVCommand, command),
+                             ('hits', '/fuel/cloud_hits_world', PointCloud2)]]
+        subscriptions += [rospy.Subscriber('/uav_controller/trajectory_setpoint', TrajectorySetpoint, command),
                           rospy.Subscriber('/planning_vis/frontier', Marker, marker)]
-        wait(lambda: 'state' in latest and latest['state'].connected and latest['state'].odom_valid and
-             all(k in latest for k in ('mapping', 'hits', 'mesh', 'odom')), 120, 'GPS, mapping cloud and UAV mesh ready')
+        wait(lambda: 'state' in latest and latest['state'].connected and
+             all(k in latest for k in ('mapping', 'hits', 'odom', 'control')) and
+             latest['control'].feedback_ready, 120, 'MAVROS odometry, mapping cloud and controller ready')
         assert latest['mapping'].header.frame_id == 'uav1/lidar_link'
         assert latest['hits'].header.frame_id == 'world'
         ranges = [math.sqrt(x*x+y*y+z*z) for x,y,z in point_cloud2.read_points(
@@ -101,7 +102,7 @@ def main():
         set_mode = rospy.ServiceProxy('/uav1/mavros/set_mode', SetMode)
         arm = rospy.ServiceProxy('/uav1/mavros/cmd/arming', CommandBool)
         # PX4 needs a continuous setpoint stream before accepting OFFBOARD.
-        # The first odometry/mesh callback can arrive before that interval.
+        # The first odometry callback can arrive before that interval.
         ready_at = rospy.Time.now() + rospy.Duration(2)
         wait(lambda: rospy.Time.now() >= ready_at, 30, 'Initial setpoint stream established')
         last_request = [0.0]
@@ -115,44 +116,49 @@ def main():
         wait(enter_offboard, 30, 'OFFBOARD active')
         assert arm(value=True).success
         wait(lambda: latest['state'].armed, 15, 'Simulated P600 armed')
-        pub = rospy.Publisher('/uav1/prometheus/command', UAVCommand, queue_size=1)
         goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
-        wait(lambda: pub.get_num_connections() > 0 and goal_pub.get_num_connections() > 0, 10, 'Command/goal subscribers ready')
-        cmd = UAVCommand(Agent_CMD=UAVCommand.Move, Move_mode=UAVCommand.XYZ_POS,
-                         position_ref=[0, 0, 1.5], Command_ID=1)
-        for _ in range(5):
-            pub.publish(cmd)
-            time.sleep(0.1)
-        wait(lambda: abs(latest['state'].position[2] - 1.5) < 0.2 and
-             math.sqrt(sum(v*v for v in latest['state'].velocity)) < 0.25 and
-             latest['control'].control_state == UAVControlState.COMMAND_CONTROL, 90, 'Takeoff and stable hover verified')
+        wait(lambda: goal_pub.get_num_connections() > 0, 10, 'Goal subscriber ready')
+        wait(lambda: abs(latest['odom'].pose.pose.position.z - 1.0) < 0.25 and
+             math.sqrt(sum(v*v for v in (latest['odom'].twist.twist.linear.x,
+                                         latest['odom'].twist.twist.linear.y,
+                                         latest['odom'].twist.twist.linear.z))) < 0.25 and
+             latest['control'].phase in ('HOLD', 'TRAJECTORY'), 90, 'Takeoff and stable hover verified')
         goal = PoseStamped()
         goal.header.frame_id = 'world'
         goal.header.stamp = rospy.Time.now()
         goal.pose.orientation.w = 1
         goal_pub.publish(goal)
-        wait(lambda: len(commands) > 10, 60, 'RViz 2D Nav Goal topic triggered FUEL mode 9 commands')
-        start = list(latest['state'].position)
+        wait(lambda: len(commands) > 10, 60, 'RViz 2D Nav Goal triggered FUEL trajectory setpoints')
+        start = [latest['odom'].pose.pose.position.x, latest['odom'].pose.pose.position.y,
+                 latest['odom'].pose.pose.position.z]
         end = time.monotonic() + args.explore_seconds
         max_travel = 0
         while time.monotonic() < end:
             state = latest['state']
-            assert state.armed and state.mode == 'OFFBOARD' and state.odom_valid
-            assert not latest['control'].failsafe
-            assert -1.2 <= state.position[0] <= 22.2 and -11.2 <= state.position[1] <= 10.2
-            assert 0.2 < state.position[2] < 3.0
-            max_travel = max(max_travel, math.dist(start, state.position))
+            odom = latest['odom']
+            position = [odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z]
+            assert state.armed and state.mode == 'OFFBOARD'
+            assert latest['control'].feedback_ready and latest['control'].output_policy == 'CLOSED_LOOP'
+            assert -1.2 <= position[0] <= 22.2 and -11.2 <= position[1] <= 10.2
+            assert 0.2 < position[2] < 3.0
+            max_travel = max(max_travel, math.dist(start, position))
             time.sleep(0.1)
         assert max_travel > 0.5, 'Vehicle did not travel during exploration'
         assert not frontier_errors, 'Empty frontier ADD markers were published'
         stop = rospy.ServiceProxy('/fuel/stop', Trigger)
         assert stop().success
-        wait(lambda: math.sqrt(sum(v*v for v in latest['state'].velocity)) < 0.3, 30, 'Stop returned to hover')
-        stopped = list(latest['state'].position)
+        wait(lambda: math.sqrt(sum(v*v for v in (latest['odom'].twist.twist.linear.x,
+                                                     latest['odom'].twist.twist.linear.y,
+                                                     latest['odom'].twist.twist.linear.z))) < 0.3,
+             30, 'Stop returned to hover')
+        stopped = [latest['odom'].pose.pose.position.x, latest['odom'].pose.pose.position.y,
+                   latest['odom'].pose.pose.position.z]
         count = len(commands)
         time.sleep(3)
         assert len(commands) == count, 'Trajectory forwarded after stop'
-        assert math.dist(stopped, latest['state'].position) < 0.5, 'Hover drift after stop'
+        assert math.dist(stopped, [latest['odom'].pose.pose.position.x,
+                                   latest['odom'].pose.pose.position.y,
+                                   latest['odom'].pose.pose.position.z]) < 0.5, 'Hover drift after stop'
         print('PASS: real mapping rays, takeoff, RViz trigger, {:.2f} m travel, stop/hover. {}'.format(max_travel, work), flush=True)
     finally:
         # Only the group created by this test is signalled.

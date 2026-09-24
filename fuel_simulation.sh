@@ -2,7 +2,7 @@
 set -eo pipefail
 fuel_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$fuel_root/source.sh"
-for fuel_node in prometheus_fuel/fuel_bridge prometheus_uav_control/uav_control_main exploration_manager/exploration_node plan_manage/traj_server; do
+for fuel_node in prometheus_fuel/fuel_bridge uav_controller/geometric_controller_node exploration_manager/exploration_node plan_manage/traj_server; do
   if [[ ! -x "$fuel_root/devel/fuel/lib/$fuel_node" ]]; then
     echo "Build incomplete ($fuel_node missing); run bash compile_fuel.sh." >&2
     exit 1

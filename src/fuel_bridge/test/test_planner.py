@@ -8,7 +8,7 @@ import rospy
 import rostest
 from bspline.msg import Bspline
 from nav_msgs.msg import Odometry
-from prometheus_msgs.msg import UAVCommand, UAVControlState
+from uav_controller.msg import FlightStatus, TrajectorySetpoint
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import PointCloud2
 from std_msgs.msg import Header
@@ -20,14 +20,14 @@ class PlannerTest(unittest.TestCase):
     def test_planner(self):
         self.moves, self.splines, self.frontiers, self.maps = [], [], [], []
         subscribers = [
-            rospy.Subscriber('/uav1/prometheus/command', UAVCommand, self.moves.append),
+            rospy.Subscriber('/uav_controller/trajectory_setpoint', TrajectorySetpoint, self.moves.append),
             rospy.Subscriber('/planning/bspline', Bspline, self.splines.append),
             rospy.Subscriber('/planning_vis/frontier', Marker, self.frontiers.append),
             rospy.Subscriber('/sdf_map/occupancy_all', PointCloud2, self.maps.append),
         ]
         odom_pub = rospy.Publisher('/fuel_test/odom', Odometry, queue_size=2)
         cloud_pub = rospy.Publisher('/fuel_test/cloud', PointCloud2, queue_size=2)
-        state_pub = rospy.Publisher('/uav1/prometheus/control_state', UAVControlState, queue_size=2)
+        state_pub = rospy.Publisher('/uav_controller/fsm_status', FlightStatus, queue_size=2)
         # Long returns let FUEL raycast free space to its 10 m range limit.
         # A small wall at x=4 provides occupied voxels without closing the room.
         points = []
@@ -54,7 +54,8 @@ class PlannerTest(unittest.TestCase):
             odom.pose.pose.position.z = min(1.5, 0.2 + 0.4 * (time.monotonic() - scan_start))
             odom.pose.pose.orientation.w = 1
             odom_pub.publish(odom)
-            state_pub.publish(UAVControlState(control_state=UAVControlState.COMMAND_CONTROL))
+            state_pub.publish(FlightStatus(feedback_ready=True, output_policy="CLOSED_LOOP",
+                                           phase="HOLD", mission_id=42))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id='uav1/lidar_link'), points))
 
@@ -72,10 +73,10 @@ class PlannerTest(unittest.TestCase):
             response = rospy.ServiceProxy('/fuel/start', Trigger)()
             self.assertTrue(response.success, response.message)
             deadline = time.monotonic() + 20
-            while time.monotonic() < deadline and not any(c.Agent_CMD == UAVCommand.Move for c in self.moves):
+            while time.monotonic() < deadline and not any(not c.finished for c in self.moves):
                 time.sleep(0.1)
             self.assertTrue(self.splines, 'FUEL produced no B-spline')
-            self.assertTrue(any(c.Agent_CMD == UAVCommand.Move for c in self.moves), 'No controller command')
+            self.assertTrue(any(not c.finished for c in self.moves), 'No controller command')
             for marker in self.frontiers:
                 if marker.action == Marker.ADD:
                     self.assertTrue(marker.points, 'RViz rejects an empty frontier ADD marker')
