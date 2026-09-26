@@ -2,6 +2,7 @@
   <arg name="uav_id" default="1"/>
   <arg name="odom_topic" default="/uav$(arg uav_id)/mavros/local_position/odom"/>
   <arg name="cloud_topic" default="/livox/lidar_mapping"/>
+  <arg name="battery_topic" default="/uav$(arg uav_id)/mavros/battery"/>
   <arg name="lidar_frame" default="uav$(arg uav_id)/lidar_link"/>
   <arg name="map_size_x" default="48.0"/>
   <arg name="map_size_y" default="32.0"/>
@@ -38,6 +39,7 @@
   </include>
   <!-- Override camera-demo parameters after loading the upstream algorithm. -->
   <rosparam ns="exploration_node" command="load" file="$(find prometheus_fuel)/config/mid360.yaml"/>
+  <rosparam ns="exploration_node" command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
   <param name="exploration_node/exploration/tsp_dir" value="$(env FUEL_TSP_DIR)"/>
   <node pkg="plan_manage" type="traj_server" name="fuel_traj_server" output="screen" required="true">
     <remap from="/position_cmd" to="/fuel/position_cmd"/>
@@ -45,9 +47,19 @@
     <param name="traj_server/pub_traj_id" value="4"/>
     <param name="fsm/replan_time" value="0.2"/>
     <rosparam command="load" file="$(find prometheus_fuel)/config/mid360.yaml"/>
+    <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
   </node>
   <group ns="fuel">
+    <node pkg="prometheus_fuel" type="mission_manager_node" name="mission_manager"
+          output="screen" required="true">
+      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+      <remap from="odom" to="$(arg odom_topic)"/>
+      <remap from="control_state" to="/uav_controller/fsm_status"/>
+      <remap from="battery" to="$(arg battery_topic)"/>
+      <remap from="goal" to="/move_base_simple/goal"/>
+    </node>
     <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" output="screen" required="true">
+      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
       <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
       <param name="lidar_frame" value="$(arg lidar_frame)"/>
       <param name="box_min_x" value="$(arg box_min_x)"/>
@@ -61,7 +73,6 @@
       <remap from="control_state" to="/uav_controller/fsm_status"/>
       <remap from="command" to="/uav_controller/trajectory_setpoint"/>
       <remap from="trigger" to="/waypoint_generator/waypoints"/>
-      <remap from="goal" to="/move_base_simple/goal"/>
     </node>
   </group>
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="fuel_rviz"

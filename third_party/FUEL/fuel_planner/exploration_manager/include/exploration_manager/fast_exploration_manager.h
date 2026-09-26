@@ -30,6 +30,11 @@ public:
 
   int planExploreMotion(const Vector3d& pos, const Vector3d& vel, const Vector3d& acc,
                         const Vector3d& yaw);
+  // Shared collision-aware geometric/dynamic/B-spline/yaw pipeline. Far goals
+  // intentionally produce a safe intermediate segment and keep the same task.
+  int planToGoal(const Vector3d& pos, const Vector3d& vel, const Vector3d& acc,
+                 const Vector3d& yaw, const Vector3d& goal, double goal_yaw,
+                 double segment_length = 5.0, bool recovery = false);
 
   // Benchmark method, classic frontier and rapid frontier
   int classicFrontier(const Vector3d& pos, const double& yaw);

@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Real FUEL: blocked home must keep retrying, then recover when map clears."""
+import copy
+import math
+import time
+import unittest
+
+import rospy
+import rostest
+from nav_msgs.msg import Odometry
+from sensor_msgs import point_cloud2
+from sensor_msgs.msg import BatteryState, PointCloud2
+from std_msgs.msg import Header
+from std_srvs.srv import Trigger
+from uav_controller.msg import FlightStatus, TrajectorySetpoint
+from uav_mission_msgs.msg import (ControllerAck, MissionStatus, PlannerStatus,
+                                 TrajectoryStatus)
+
+
+class PersistentReturnPlannerTest(unittest.TestCase):
+    def wait_for(self, predicate, message, timeout=20.0):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            time.sleep(0.05)
+        self.fail(message)
+
+    def test_map_recovery(self):
+        statuses, planning, handoffs, commands, maps = [], [], [], [], []
+        subscribers = [
+            rospy.Subscriber('/fuel/mission_status', MissionStatus, statuses.append),
+            rospy.Subscriber('/fuel/planner_status', PlannerStatus, planning.append),
+            rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, handoffs.append),
+            rospy.Subscriber('/uav_controller/trajectory_setpoint', TrajectorySetpoint, commands.append),
+            rospy.Subscriber('/sdf_map/occupancy_all', PointCloud2, maps.append),
+        ]
+        odom_pub = rospy.Publisher('/fuel_test/odom', Odometry, queue_size=2)
+        cloud_pub = rospy.Publisher('/fuel_test/cloud', PointCloud2, queue_size=2)
+        state_pub = rospy.Publisher('/uav_controller/fsm_status', FlightStatus, queue_size=2)
+        battery_pub = rospy.Publisher('/fuel_test/battery', BatteryState, queue_size=2)
+        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=5)
+        blocked = [True]
+        began = time.monotonic()
+        pitch_c, pitch_s = math.cos(0.35), math.sin(0.35)
+        directions = []
+        for az in range(0, 360, 2):
+            for el in range(-7, 54, 2):
+                azimuth, elevation = math.radians(az), math.radians(el)
+                x = math.cos(elevation) * math.cos(azimuth)
+                y = math.cos(elevation) * math.sin(azimuth)
+                z = math.sin(elevation)
+                directions.append((x, y, z, pitch_c*x + pitch_s*z, -pitch_s*x + pitch_c*z))
+
+        def feed(_):
+            stamp = rospy.Time.now()
+            height = min(1.5, 0.2 + 0.5 * (time.monotonic() - began))
+            odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
+            odom.pose.pose.position.z = height
+            odom.pose.pose.orientation.w = 1.0
+            odom_pub.publish(odom)
+            state_pub.publish(FlightStatus(feedback_ready=True, output_policy='CLOSED_LOOP', phase='HOLD'))
+            battery_pub.publish(BatteryState(header=Header(stamp=stamp), percentage=0.31))
+            points = []
+            for x, y, z, dx, dz in directions:
+                distance = 12.0
+                if blocked[0] and dx > 0.01:
+                    wall = (4.0 - 0.1471448904) / dx
+                    if abs(wall*y) < 1.5 and 0.0 < height + 0.2769686356 + wall*dz < 3.0:
+                        distance = min(distance, wall)
+                # Model a floor return. Rays ending below the map's ground
+                # cutoff are discarded before raycasting, so an infinite
+                # downward no-hit ray cannot clear the former wall.
+                if dz < -1e-6:
+                    floor_distance = (0.25 - height - 0.2769686356) / dz
+                    if floor_distance > 0:
+                        distance = min(distance, floor_distance)
+                points.append((distance*x, distance*y, distance*z))
+            cloud_pub.publish(point_cloud2.create_cloud_xyz32(
+                Header(stamp=stamp, frame_id='uav1/lidar_link'), points))
+            if handoffs and handoffs[-1].state == TrajectoryStatus.PENDING:
+                item = handoffs[-1]
+                ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=item.context,
+                                              trajectory_id=item.trajectory_id, accepted=True))
+
+        timer = rospy.Timer(rospy.Duration(0.1), feed)
+        try:
+            rospy.wait_for_service('/fuel/return_home', timeout=15)
+            self.wait_for(lambda: time.monotonic()-began > 5 and statuses and statuses[-1].battery_valid
+                          and any(m.width for m in maps), 'synthetic wall/map was not ready')
+            self.assertTrue(rospy.ServiceProxy('/fuel/return_home', Trigger)().success)
+            self.wait_for(lambda: any(s.consecutive_failures >= 6 for s in planning),
+                          'FUEL stopped retrying after a failure count')
+            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURN_RECOVERY,
+                          'manager abandoned or failed to report continuing return recovery')
+            context = copy.deepcopy(statuses[-1].context)
+            self.assertEqual(statuses[-1].return_reason, MissionStatus.MANUAL_RETURN)
+            blocked[0] = False  # Fresh free-space rays remove the obstacle from the same map.
+            self.wait_for(lambda: any(c.context == context and not c.finished for c in commands),
+                          'FUEL did not resume the same return task after the map became traversable', 30)
+            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
+                          'recovered execution was not acknowledged')
+            self.assertEqual(statuses[-1].context, context)
+            self.assertTrue(any(s.context == context and s.state == PlannerStatus.TRAJECTORY_READY
+                                for s in planning))
+            self.assertTrue(rospy.ServiceProxy('/fuel/stop', Trigger)().success)
+        finally:
+            timer.shutdown()
+
+
+if __name__ == '__main__':
+    rospy.init_node('test_return_planner')
+    rostest.rosrun('prometheus_fuel', 'persistent_return_planner', PersistentReturnPlannerTest)

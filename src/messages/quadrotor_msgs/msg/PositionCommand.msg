@@ -1,4 +1,5 @@
 Header header
+uav_mission_msgs/TaskContext context
 geometry_msgs/Point position
 geometry_msgs/Vector3 velocity
 geometry_msgs/Vector3 acceleration

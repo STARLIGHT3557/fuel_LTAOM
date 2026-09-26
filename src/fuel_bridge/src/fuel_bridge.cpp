@@ -13,11 +13,20 @@
 #include <pcl/point_types.h>
 #include <uav_controller/FlightStatus.h>
 #include <uav_controller/TrajectorySetpoint.h>
+#include <uav_mission_msgs/MissionCommand.h>
+#include <uav_mission_msgs/PlannerStatus.h>
+#include <uav_mission_msgs/TaskContext.h>
 #include <quadrotor_msgs/PositionCommand.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <std_msgs/Empty.h>
-#include <std_srvs/Trigger.h>
 #include <visualization_msgs/Marker.h>
+
+namespace {
+bool sameContext(const uav_mission_msgs::TaskContext& a,
+                 const uav_mission_msgs::TaskContext& b) {
+  return a.manager_epoch == b.manager_epoch && a.mission_id == b.mission_id &&
+         a.task_type == b.task_type && a.source_id == b.source_id;
+}
+}  // namespace
 
 class FuelBridge {
   using SyncPolicy = message_filters::sync_policies::ApproximateTime<
@@ -26,9 +35,8 @@ class FuelBridge {
   message_filters::Subscriber<sensor_msgs::PointCloud2> cloud_sub_;
   message_filters::Subscriber<nav_msgs::Odometry> sync_odom_sub_;
   std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
-  ros::Subscriber odom_sub_, state_sub_, command_sub_, goal_sub_;
-  ros::Publisher cloud_pub_, hits_pub_, pose_pub_, command_pub_, trigger_pub_, stop_pub_, bounds_pub_;
-  ros::ServiceServer start_srv_, stop_srv_;
+  ros::Subscriber odom_sub_, state_sub_, command_sub_, mission_sub_, authorization_sub_;
+  ros::Publisher cloud_pub_, hits_pub_, pose_pub_, command_pub_, trigger_pub_, bounds_pub_, planner_status_pub_;
   ros::Timer watchdog_;
   nav_msgs::Odometry odom_;
   uav_controller::FlightStatus state_;
@@ -37,10 +45,15 @@ class FuelBridge {
   Eigen::Matrix3d lidar_rotation_;
   Eigen::Vector3d bounds_min_, bounds_max_;
   bool have_bounds_ = false;
-  std::string world_frame_, lidar_frame_;
+  std::string world_frame_, lidar_frame_, source_id_;
   double min_range_, data_timeout_, command_timeout_, planning_timeout_;
   double no_return_range_;
   bool active_ = false;
+  bool timeout_reported_ = false;
+  uint64_t trajectory_id_ = 0;
+  uav_mission_msgs::TaskContext authorization_, context_, closed_context_;
+  uav_mission_msgs::MissionCommand last_mission_command_;
+  bool have_mission_command_ = false, have_closed_context_ = false;
 
   bool fresh(const ros::Time& stamp, double timeout) const {
     const double age = (ros::Time::now() - stamp).toSec();
@@ -153,18 +166,19 @@ class FuelBridge {
     cloud_stamp_ = cloud->header.stamp;
   }
 
-  bool start(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& response) {
-    if (active_) {
-      response.message = "Exploration is already active; stop before restarting.";
+  bool start(const uav_mission_msgs::MissionCommand& command) {
+    if (have_closed_context_ && sameContext(closed_context_, command.context)) {
+      ROS_WARN("Ignoring delayed START for a closed mission batch");
       return true;
     }
+    if (active_ && sameContext(context_, command.context)) return true;
     if (!inBounds(odom_.pose.pose.position)) {
-      response.message = "Current position is outside the exploration box shown in RViz. Check local coordinates and takeoff position.";
+      ROS_ERROR("Mission rejected: current position is outside the exploration box.");
       return true;
     }
     if (!ready() || trigger_pub_.getNumSubscribers() == 0 || cloud_pub_.getNumSubscribers() == 0) {
-      response.message = "Wait for fresh odometry/cloud, FUEL, and CLOSED_LOOP control.";
-      return true;
+      ROS_WARN_THROTTLE(1.0, "Authorized mission is waiting for fresh odometry/cloud, FUEL, and CLOSED_LOOP control.");
+      return false;
     }
     nav_msgs::Path trigger;
     trigger.header = odom_.header;
@@ -172,27 +186,27 @@ class FuelBridge {
     pose.header = trigger.header;
     pose.pose = odom_.pose.pose;
     trigger.poses.push_back(pose);
+    context_ = command.context;
+    have_closed_context_ = false;
     started_ = ros::Time::now();
     last_command_ = ros::Time();
+    trajectory_id_ = 0;
+    timeout_reported_ = false;
     active_ = true;
     trigger_pub_.publish(trigger);
-    response.success = true;
-    response.message = "FUEL exploration triggered.";
     return true;
   }
 
-  void halt() {
+  void halt(const geometry_msgs::Point* hold = nullptr) {
     active_ = false;
-    stop_pub_.publish(std_msgs::Empty());
-    // Finish the direct trajectory at the measured pose so the controller
-    // enters HOLD without following a stale planner command.
     if (fresh(state_stamp_, data_timeout_) && state_.feedback_ready &&
         state_.output_policy == "CLOSED_LOOP") {
       uav_controller::TrajectorySetpoint cmd;
       cmd.header.stamp = ros::Time::now();
       cmd.header.frame_id = world_frame_;
-      cmd.mission_id = state_.mission_id;
-      cmd.position = odom_.pose.pose.position;
+      cmd.context = context_;
+      cmd.trajectory_id = trajectory_id_;
+      cmd.position = hold ? *hold : odom_.pose.pose.position;
       const auto &q = odom_.pose.pose.orientation;
       cmd.yaw = std::atan2(2.0 * (q.w*q.z + q.x*q.y),
                            1.0 - 2.0 * (q.y*q.y + q.z*q.z));
@@ -201,10 +215,79 @@ class FuelBridge {
     }
   }
 
+  void publishPlannerStatus(uint8_t state, const std::string& detail) {
+    uav_mission_msgs::PlannerStatus status;
+    status.header.stamp = ros::Time::now();
+    status.header.frame_id = world_frame_;
+    status.context = context_;
+    status.trajectory_id = trajectory_id_;
+    status.state = state;
+    status.detail = detail;
+    planner_status_pub_.publish(status);
+  }
+
+  bool handleMissionCommand(const uav_mission_msgs::MissionCommand& command) {
+    if (command.context.manager_epoch == 0 || command.context.mission_id == 0 ||
+        command.context.task_type == uav_mission_msgs::TaskContext::TASK_NONE ||
+        command.context.source_id != source_id_) {
+      ROS_WARN("Ignoring unauthorized mission command");
+      return true;
+    }
+    // Authorization and command are separate ROS connections, so their
+    // delivery order is intentionally not assumed.
+    if (!sameContext(command.context, authorization_)) return false;
+    if (command.command == uav_mission_msgs::MissionCommand::STOP) {
+      if (sameContext(command.context, context_)) {
+        closed_context_ = command.context;
+        have_closed_context_ = true;
+        halt();
+      }
+      return true;
+    }
+    if (command.command == uav_mission_msgs::MissionCommand::HOLD_HOME) {
+      if (sameContext(command.context, context_)) {
+        closed_context_ = command.context;
+        have_closed_context_ = true;
+        halt(&command.goal);
+      }
+      return true;
+    }
+    if (command.command == uav_mission_msgs::MissionCommand::REPLAN) {
+      if (!sameContext(command.context, context_) ||
+          (have_closed_context_ && sameContext(command.context, closed_context_))) return true;
+      if (!ready()) return false;
+      // Reopen after a watchdog timeout without rolling back the accepted
+      // trajectory id, changing authorization or re-triggering exploration.
+      if (!active_) {
+        active_ = true;
+        started_ = ros::Time::now();
+        last_command_ = ros::Time();
+        timeout_reported_ = false;
+      }
+      return true;
+    }
+    if (command.command != uav_mission_msgs::MissionCommand::START) return true;
+    return start(command);
+  }
+
+  void missionCallback(const uav_mission_msgs::MissionCommandConstPtr& msg) {
+    last_mission_command_ = *msg;
+    have_mission_command_ = true;
+    if (handleMissionCommand(*msg)) have_mission_command_ = false;
+  }
+
+  void authorizationCallback(const uav_mission_msgs::TaskContextConstPtr& msg) {
+    authorization_ = *msg;
+    if (have_mission_command_ && handleMissionCommand(last_mission_command_))
+      have_mission_command_ = false;
+  }
+
   void commandCallback(const quadrotor_msgs::PositionCommandConstPtr& msg) {
     if (!active_ || !ready() || !fresh(msg->header.stamp, command_timeout_) ||
         msg->header.stamp < started_ || msg->header.frame_id != world_frame_ ||
-        msg->trajectory_flag != quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY) return;
+        msg->trajectory_flag != quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY ||
+        !sameContext(msg->context, context_) || msg->trajectory_id == 0 ||
+        msg->trajectory_id < trajectory_id_) return;
     for (double value : {msg->position.x, msg->position.y, msg->position.z,
                         msg->velocity.x, msg->velocity.y, msg->velocity.z,
                         msg->acceleration.x, msg->acceleration.y, msg->acceleration.z,
@@ -213,20 +296,25 @@ class FuelBridge {
     }
     uav_controller::TrajectorySetpoint cmd;
     cmd.header = msg->header;
-    cmd.mission_id = state_.mission_id;
+    cmd.context = msg->context;
+    cmd.trajectory_id = msg->trajectory_id;
     cmd.position = msg->position;
     cmd.velocity = msg->velocity;
     cmd.acceleration = msg->acceleration;
     cmd.yaw = std::atan2(std::sin(msg->yaw), std::cos(msg->yaw));
     cmd.finished = false;
     command_pub_.publish(cmd);
+    trajectory_id_ = msg->trajectory_id;
     last_command_ = msg->header.stamp;
+    timeout_reported_ = false;
   }
 
 public:
   FuelBridge() {
     pnh_.param<std::string>("world_frame", world_frame_, "world");
     pnh_.param<std::string>("lidar_frame", lidar_frame_, "lidar_link");
+    pnh_.param<std::string>("source_id", source_id_, "fuel_planner");
+    if (source_id_.empty()) throw std::invalid_argument("source_id must not be empty");
     pnh_.param("min_range", min_range_, 0.6);
     pnh_.param("no_return_range", no_return_range_, 40.0);
     pnh_.param("data_timeout", data_timeout_, 0.5);
@@ -248,7 +336,7 @@ public:
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("sensor_pose", 2);
     command_pub_ = nh_.advertise<uav_controller::TrajectorySetpoint>("command", 10);
     trigger_pub_ = nh_.advertise<nav_msgs::Path>("trigger", 1);
-    stop_pub_ = nh_.advertise<std_msgs::Empty>("stop_planner", 1);
+    planner_status_pub_ = nh_.advertise<uav_mission_msgs::PlannerStatus>("planner_status", 10);
     cloud_sub_.subscribe(nh_, "cloud", 5);
     sync_odom_sub_.subscribe(nh_, "odom", 30);
     sync_.reset(new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(30), cloud_sub_, sync_odom_sub_));
@@ -264,29 +352,23 @@ public:
           state_ = *msg; state_stamp_ = ros::Time::now();
         });
     command_sub_ = nh_.subscribe("position_cmd", 10, &FuelBridge::commandCallback, this);
-    start_srv_ = nh_.advertiseService("start", &FuelBridge::start, this);
-    stop_srv_ = nh_.advertiseService<std_srvs::Trigger::Request, std_srvs::Trigger::Response>(
-        "stop", [this](std_srvs::Trigger::Request&, std_srvs::Trigger::Response& response) {
-          halt(); response.success = true; response.message = "FUEL stopped; hover requested."; return true;
-        });
-    goal_sub_ = nh_.subscribe<geometry_msgs::PoseStamped>("goal", 1,
-        [this](const geometry_msgs::PoseStampedConstPtr&) {
-          std_srvs::Trigger request;
-          start(request.request, request.response);
-          if (request.response.success) {
-            ROS_INFO("RViz 2D Nav Goal: FUEL exploration started.");
-          } else {
-            ROS_WARN_STREAM("RViz 2D Nav Goal did not start exploration: " << request.response.message);
-          }
-        });
+    mission_sub_ = nh_.subscribe("mission_command", 10, &FuelBridge::missionCallback, this);
+    authorization_sub_ = nh_.subscribe("authorized_context", 10, &FuelBridge::authorizationCallback, this);
     watchdog_ = nh_.createTimer(ros::Duration(0.05), [this](const ros::TimerEvent&) {
+      if (have_mission_command_ && handleMissionCommand(last_mission_command_))
+        have_mission_command_ = false;
       if (active_ && (!ready() || (last_command_.isZero() ?
           !fresh(started_, planning_timeout_) : !fresh(last_command_, command_timeout_)))) {
-        ROS_ERROR("FUEL input/command timed out or command control lost; exploration stopped.");
+        if (!timeout_reported_) {
+          publishPlannerStatus(uav_mission_msgs::PlannerStatus::OUTPUT_TIMEOUT,
+                               "FUEL input or PositionCommand output timed out");
+          timeout_reported_ = true;
+        }
+        ROS_ERROR("FUEL input/command timed out or command control lost; hover requested.");
         halt();
       }
     });
-    ROS_INFO("FUEL bridge ready. Take off and hover in CLOSED_LOOP, then click and drag RViz 2D Nav Goal to start exploration.");
+    ROS_INFO("FUEL bridge ready; mission_manager owns start/stop/return decisions.");
   }
 };
 

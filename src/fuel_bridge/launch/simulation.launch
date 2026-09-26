@@ -2,6 +2,7 @@
   <arg name="uav_id" default="1"/>
   <arg name="odom_topic" default="/uav$(arg uav_id)/mavros/local_position/odom"/>
   <arg name="cloud_topic" default="/livox/lidar_mapping"/>
+  <arg name="battery_topic" default="/uav$(arg uav_id)/mavros/battery"/>
   <arg name="lidar_frame" default="uav$(arg uav_id)/lidar_link"/>
   <!-- A dictionary lookup rejects unsupported scene names. -->
   <arg name="scene" default="cylinder"/>
@@ -15,12 +16,12 @@
   <arg name="box_min_x" default="$(eval {'cylinder': -11.0, 'indoor4': -15.0}[arg('scene')] - float(arg('spawn_x')))"/>
   <arg name="box_min_y" default="$(eval {'cylinder': -11.0, 'indoor4': -15.0}[arg('scene')] - float(arg('spawn_y')))"/>
   <arg name="box_min_z" default="0.5"/>
-  <arg name="box_max_x" default="$(eval {'cylinder': 12.0, 'indoor4': 10.0}[arg('scene')] - float(arg('spawn_x')))"/>
-  <arg name="box_max_y" default="$(eval {'cylinder': 10.0, 'indoor4': 10.0}[arg('scene')] - float(arg('spawn_y')))"/>
+  <arg name="box_max_x" default="$(eval {'cylinder': 12.0, 'indoor4': 24.0}[arg('scene')] - float(arg('spawn_x')))"/>
+  <arg name="box_max_y" default="$(eval {'cylinder': 10.0, 'indoor4': 13.0}[arg('scene')] - float(arg('spawn_y')))"/>
   <!-- Keep indoor flight goals below the 2.5 m maze walls. -->
   <arg name="box_max_z" default="$(eval {'cylinder': 2.5, 'indoor4': 2.0}[arg('scene')])"/>
-  <arg name="max_vel" default="1.0"/>
-  <arg name="max_acc" default="1.0"/>
+  <arg name="max_vel" default="3.0"/>
+  <arg name="max_acc" default="2.0"/>
   <arg name="gui" default="true"/>
   <arg name="rviz" default="true"/>
   <include file="$(find prometheus_gazebo)/launch/p600_mid360.launch">
@@ -45,6 +46,7 @@
     <arg name="uav_id" value="$(arg uav_id)"/>
     <arg name="odom_topic" value="$(arg odom_topic)"/>
     <arg name="cloud_topic" value="$(arg cloud_topic)"/>
+    <arg name="battery_topic" value="$(arg battery_topic)"/>
     <arg name="lidar_frame" value="$(arg lidar_frame)"/>
     <arg name="map_size_x" value="$(arg map_size_x)"/>
     <arg name="map_size_y" value="$(arg map_size_y)"/>

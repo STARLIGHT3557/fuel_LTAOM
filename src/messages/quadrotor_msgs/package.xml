@@ -8,6 +8,7 @@
   <buildtool_depend>catkin</buildtool_depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>uav_mission_msgs</depend>
   <exec_depend>message_runtime</exec_depend>
   <build_depend>message_generation</build_depend>
 </package>

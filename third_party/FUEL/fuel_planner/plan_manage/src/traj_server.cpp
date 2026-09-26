@@ -1,503 +1,394 @@
-#include "bspline/non_uniform_bspline.h"
-#include "nav_msgs/Odometry.h"
-#include "bspline/Bspline.h"
-#include "quadrotor_msgs/PositionCommand.h"
-#include "std_msgs/Empty.h"
-#include "visualization_msgs/Marker.h"
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <stdexcept>
+#include <string>
+
+#include <Eigen/Eigen>
+#include <bspline/Bspline.h>
+#include <bspline/non_uniform_bspline.h>
+#include <nav_msgs/Odometry.h>
+#include <quadrotor_msgs/PositionCommand.h>
 #include <ros/ros.h>
-#include <poly_traj/polynomial_traj.h>
-#include <active_perception/perception_utils.h>
+#include <std_msgs/Empty.h>
+#include <uav_mission_msgs/ControllerAck.h>
+#include <uav_mission_msgs/MissionCommand.h>
+#include <uav_mission_msgs/PlannerStatus.h>
+#include <uav_mission_msgs/TaskContext.h>
+#include <uav_mission_msgs/TrajectoryStatus.h>
 
-#include <plan_manage/backward.hpp>
-namespace backward {
-backward::SignalHandling sh;
-}
 using fast_planner::NonUniformBspline;
-using fast_planner::Polynomial;
-using fast_planner::PolynomialTraj;
-using fast_planner::PerceptionUtils;
 
-ros::Publisher cmd_vis_pub, pos_cmd_pub, traj_pub;
+namespace {
+struct TrajectorySlot {
+  bool valid{false};
+  bool controller_accepted{false};
+  bool completion_reported{false};
+  uav_mission_msgs::TaskContext context;
+  uint64_t id{0};
+  ros::Time start_time;
+  ros::Time received_at;
+  double duration{0.0};
+  NonUniformBspline position, velocity, acceleration, yaw, yaw_rate;
+};
+
+ros::Publisher command_pub, status_pub;
 nav_msgs::Odometry odom;
-quadrotor_msgs::PositionCommand cmd;
+uav_mission_msgs::TaskContext authorization;
+TrajectorySlot active, pending;
+quadrotor_msgs::PositionCommand command;
+std::string world_frame{"world"};
+std::string source_id{"fuel_planner"};
+double position_switch_tolerance{0.75};
+double velocity_switch_tolerance{1.0};
+double acceleration_switch_tolerance{2.0};
+double handover_timeout{2.0};
+double braking_acceleration{1.0};
 
-// Info of generated traj
-vector<NonUniformBspline> traj_;
-double traj_duration_;
-ros::Time start_time_;
-int traj_id_;
-int pub_traj_id_;
+bool braking{false};
+ros::Time braking_started;
+Eigen::Vector3d braking_position{Eigen::Vector3d::Zero()};
+Eigen::Vector3d braking_velocity{Eigen::Vector3d::Zero()};
+uav_mission_msgs::TaskContext braking_context, closed_context;
+uint64_t braking_trajectory_id{0};
+double braking_yaw{0.0};
+bool have_closed_context{false};
 
-shared_ptr<PerceptionUtils> percep_utils_;
+bool sameContext(const uav_mission_msgs::TaskContext& a,
+                 const uav_mission_msgs::TaskContext& b) {
+  return a.manager_epoch == b.manager_epoch && a.mission_id == b.mission_id &&
+         a.task_type == b.task_type && a.source_id == b.source_id;
+}
 
-// Info of replan
-bool receive_traj_ = false;
-double replan_time_;
+bool validContext(const uav_mission_msgs::TaskContext& context) {
+  return context.manager_epoch != 0 && context.mission_id != 0 &&
+         context.task_type != uav_mission_msgs::TaskContext::TASK_NONE &&
+         context.source_id == source_id && sameContext(context, authorization);
+}
 
-// Executed traj, commanded and real ones
-vector<Eigen::Vector3d> traj_cmd_, traj_real_;
+void publishStatus(const TrajectorySlot& slot, uint8_t state, const std::string& detail) {
+  uav_mission_msgs::TrajectoryStatus status;
+  status.header.stamp = ros::Time::now();
+  status.header.frame_id = world_frame;
+  status.context = slot.context;
+  status.trajectory_id = slot.id;
+  status.state = state;
+  status.detail = detail;
+  status_pub.publish(status);
+}
 
-// Data for benchmark comparison
-ros::Time start_time, end_time, last_time;
-double energy;
-
-// Loop correction
-Eigen::Matrix3d R_loop;
-Eigen::Vector3d T_loop;
-bool isLoopCorrection = false;
-
-double calcPathLength(const vector<Eigen::Vector3d>& path) {
-  if (path.empty()) return 0;
-  double len = 0.0;
-  for (int i = 0; i < path.size() - 1; ++i) {
-    len += (path[i + 1] - path[i]).norm();
+void evaluate(TrajectorySlot& slot, const ros::Time& stamp, Eigen::Vector3d& position,
+              Eigen::Vector3d& velocity, Eigen::Vector3d& acceleration,
+              double& yaw, double& yaw_rate) {
+  const double t = std::max(0.0, std::min(slot.duration, (stamp - slot.start_time).toSec()));
+  position = slot.position.evaluateDeBoorT(t);
+  yaw = slot.yaw.evaluateDeBoorT(t)[0];
+  if (t >= slot.duration) {
+    velocity.setZero();
+    acceleration.setZero();
+    yaw_rate = 0.0;
+  } else {
+    velocity = slot.velocity.evaluateDeBoorT(t);
+    acceleration = slot.acceleration.evaluateDeBoorT(t);
+    yaw_rate = slot.yaw_rate.evaluateDeBoorT(t)[0];
   }
-  return len;
 }
 
-void displayTrajWithColor(vector<Eigen::Vector3d> path, double resolution, Eigen::Vector4d color,
-                          int id) {
-  visualization_msgs::Marker mk;
-  mk.header.frame_id = "world";
-  mk.header.stamp = ros::Time::now();
-  mk.type = visualization_msgs::Marker::SPHERE_LIST;
-  mk.action = visualization_msgs::Marker::DELETE;
-  mk.id = id;
-  traj_pub.publish(mk);
-
-  mk.action = visualization_msgs::Marker::ADD;
-  mk.pose.orientation.x = 0.0;
-  mk.pose.orientation.y = 0.0;
-  mk.pose.orientation.z = 0.0;
-  mk.pose.orientation.w = 1.0;
-  mk.color.r = color(0);
-  mk.color.g = color(1);
-  mk.color.b = color(2);
-  mk.color.a = color(3);
-  mk.scale.x = resolution;
-  mk.scale.y = resolution;
-  mk.scale.z = resolution;
-  geometry_msgs::Point pt;
-  for (int i = 0; i < int(path.size()); i++) {
-    pt.x = path[i](0);
-    pt.y = path[i](1);
-    pt.z = path[i](2);
-    mk.points.push_back(pt);
+void evaluateBraking(const ros::Time& stamp, Eigen::Vector3d& position,
+                     Eigen::Vector3d& velocity, Eigen::Vector3d& acceleration) {
+  const double stop_time = braking_velocity.norm() / braking_acceleration;
+  const double t = std::max(0.0, std::min(stop_time, (stamp - braking_started).toSec()));
+  position = braking_position;
+  velocity.setZero();
+  acceleration.setZero();
+  if (stop_time > 1e-6) {
+    velocity = braking_velocity * (1.0 - t / stop_time);
+    if (t < stop_time) acceleration = -braking_velocity / stop_time;
+    position += braking_velocity * (t - 0.5 * t * t / stop_time);
   }
-  traj_pub.publish(mk);
-  ros::Duration(0.001).sleep();
 }
 
-void drawFOV(const vector<Eigen::Vector3d>& list1, const vector<Eigen::Vector3d>& list2) {
-  visualization_msgs::Marker mk;
-  mk.header.frame_id = "world";
-  mk.header.stamp = ros::Time::now();
-  mk.id = 0;
-  mk.ns = "current_pose";
-  mk.type = visualization_msgs::Marker::LINE_LIST;
-  mk.pose.orientation.x = 0.0;
-  mk.pose.orientation.y = 0.0;
-  mk.pose.orientation.z = 0.0;
-  mk.pose.orientation.w = 1.0;
-  mk.color.r = 1.0;
-  mk.color.g = 0.0;
-  mk.color.b = 0.0;
-  mk.color.a = 1.0;
-  mk.scale.x = 0.04;
-  mk.scale.y = 0.04;
-  mk.scale.z = 0.04;
-
-  // Clean old marker
-  mk.action = visualization_msgs::Marker::DELETE;
-  cmd_vis_pub.publish(mk);
-
-  if (list1.size() == 0) return;
-
-  // Pub new marker
-  geometry_msgs::Point pt;
-  for (int i = 0; i < int(list1.size()); ++i) {
-    pt.x = list1[i](0);
-    pt.y = list1[i](1);
-    pt.z = list1[i](2);
-    mk.points.push_back(pt);
-
-    pt.x = list2[i](0);
-    pt.y = list2[i](1);
-    pt.z = list2[i](2);
-    mk.points.push_back(pt);
+bool continuousWithExecution(TrajectorySlot& candidate) {
+  Eigen::Vector3d reference_p, reference_v, reference_a, new_p, new_v, new_a;
+  double reference_yaw = 0.0, reference_yaw_rate = 0.0, new_yaw, new_yaw_rate;
+  if (braking && sameContext(braking_context, candidate.context)) {
+    evaluateBraking(candidate.start_time, reference_p, reference_v, reference_a);
+  } else if (active.valid && sameContext(active.context, candidate.context)) {
+    evaluate(active, candidate.start_time, reference_p, reference_v, reference_a,
+             reference_yaw, reference_yaw_rate);
+  } else {
+    const ros::Time now = ros::Time::now();
+    const double age = (now - odom.header.stamp).toSec();
+    if (odom.header.stamp.isZero() || age < -0.05 || age >= 0.5) {
+      ROS_ERROR("Reject trajectory without fresh odometry for task handover");
+      return false;
+    }
+    reference_p << odom.pose.pose.position.x, odom.pose.pose.position.y,
+        odom.pose.pose.position.z;
+    reference_v << odom.twist.twist.linear.x, odom.twist.twist.linear.y,
+        odom.twist.twist.linear.z;
+    // Odometry has no linear acceleration. A new task starts from the
+    // controller's current hold/flight state, so require a bounded starting
+    // acceleration relative to the zero-acceleration handover reference.
+    reference_a.setZero();
   }
-  mk.action = visualization_msgs::Marker::ADD;
-  cmd_vis_pub.publish(mk);
+  evaluate(candidate, candidate.start_time, new_p, new_v, new_a, new_yaw, new_yaw_rate);
+  const double dp = (reference_p - new_p).norm();
+  const double dv = (reference_v - new_v).norm();
+  const double da = (reference_a - new_a).norm();
+  const bool continuous = reference_p.allFinite() && reference_v.allFinite() &&
+                          reference_a.allFinite() && dp <= position_switch_tolerance &&
+                          dv <= velocity_switch_tolerance &&
+                          da <= acceleration_switch_tolerance;
+  if (!continuous)
+    ROS_ERROR("Reject discontinuous trajectory: dp=%.3f dv=%.3f da=%.3f",
+              dp, dv, da);
+  return continuous;
 }
 
-void drawCmd(const Eigen::Vector3d& pos, const Eigen::Vector3d& vec, const int& id,
-             const Eigen::Vector4d& color) {
-  visualization_msgs::Marker mk_state;
-  mk_state.header.frame_id = "world";
-  mk_state.header.stamp = ros::Time::now();
-  mk_state.id = id;
-  mk_state.type = visualization_msgs::Marker::ARROW;
-  mk_state.action = visualization_msgs::Marker::ADD;
+bool parseSpline(const bspline::Bspline& msg, TrajectorySlot& slot) {
+  if (!validContext(msg.context) || msg.traj_id <= 0 || msg.order < 1 ||
+      msg.pos_pts.size() <= static_cast<size_t>(msg.order) || msg.knots.empty() ||
+      msg.yaw_pts.size() < 4 || !std::isfinite(msg.yaw_dt) || msg.yaw_dt <= 0.0 ||
+      msg.start_time.isZero()) return false;
+  Eigen::MatrixXd position_points(msg.pos_pts.size(), 3);
+  for (size_t i = 0; i < msg.pos_pts.size(); ++i) {
+    position_points.row(i) << msg.pos_pts[i].x, msg.pos_pts[i].y, msg.pos_pts[i].z;
+    if (!position_points.row(i).allFinite()) return false;
+  }
+  Eigen::VectorXd knots(msg.knots.size());
+  for (size_t i = 0; i < msg.knots.size(); ++i) {
+    if (!std::isfinite(msg.knots[i])) return false;
+    knots(i) = msg.knots[i];
+  }
+  Eigen::MatrixXd yaw_points(msg.yaw_pts.size(), 1);
+  for (size_t i = 0; i < msg.yaw_pts.size(); ++i) {
+    if (!std::isfinite(msg.yaw_pts[i])) return false;
+    yaw_points(i, 0) = msg.yaw_pts[i];
+  }
 
-  mk_state.pose.orientation.w = 1.0;
-  mk_state.scale.x = 0.1;
-  mk_state.scale.y = 0.2;
-  mk_state.scale.z = 0.3;
-
-  geometry_msgs::Point pt;
-  pt.x = pos(0);
-  pt.y = pos(1);
-  pt.z = pos(2);
-  mk_state.points.push_back(pt);
-
-  pt.x = pos(0) + vec(0);
-  pt.y = pos(1) + vec(1);
-  pt.z = pos(2) + vec(2);
-  mk_state.points.push_back(pt);
-
-  mk_state.color.r = color(0);
-  mk_state.color.g = color(1);
-  mk_state.color.b = color(2);
-  mk_state.color.a = color(3);
-
-  cmd_vis_pub.publish(mk_state);
+  slot = TrajectorySlot{};
+  slot.context = msg.context;
+  slot.id = static_cast<uint64_t>(msg.traj_id);
+  slot.start_time = msg.start_time;
+  slot.received_at = ros::Time::now();
+  slot.position = NonUniformBspline(position_points, msg.order, 0.1);
+  slot.position.setKnot(knots);
+  slot.velocity = slot.position.getDerivative();
+  slot.acceleration = slot.velocity.getDerivative();
+  slot.yaw = NonUniformBspline(yaw_points, 3, msg.yaw_dt);
+  slot.yaw_rate = slot.yaw.getDerivative();
+  slot.duration = slot.position.getTimeSum();
+  slot.valid = std::isfinite(slot.duration) && slot.duration > 0.0;
+  return slot.valid;
 }
 
-void replanCallback(std_msgs::Empty msg) {
-  // Informed of new replan, end the current traj after some time
-  const double time_out = 0.3;
-  ros::Time time_now = ros::Time::now();
-  double t_stop = (time_now - start_time_).toSec() + time_out + replan_time_;
-  traj_duration_ = min(t_stop, traj_duration_);
-}
-
-void newCallback(std_msgs::Empty msg) {
-  // Clear the executed traj data
-  traj_cmd_.clear();
-  traj_real_.clear();
-}
-
-void odomCallbck(const nav_msgs::Odometry& msg) {
-  if (msg.child_frame_id == "X" || msg.child_frame_id == "O") return;
-  odom = msg;
-  traj_real_.push_back(
-      Eigen::Vector3d(odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z));
-
-  if (traj_real_.size() > 10000) traj_real_.erase(traj_real_.begin(), traj_real_.begin() + 1000);
-}
-
-void pgTVioCallback(geometry_msgs::Pose msg) {
-  // World to odom
-  Eigen::Quaterniond q =
-      Eigen::Quaterniond(msg.orientation.w, msg.orientation.x, msg.orientation.y, msg.orientation.z);
-  R_loop = q.toRotationMatrix();
-  T_loop << msg.position.x, msg.position.y, msg.position.z;
-
-  // cout << "R_loop: " << R_loop << endl;
-  // cout << "T_loop: " << T_loop << endl;
-}
-
-void visCallback(const ros::TimerEvent& e) {
-  // Draw the executed traj (desired state)
-  // displayTrajWithColor(traj_cmd_, 0.05, Eigen::Vector4d(1, 0, 0, 1), pub_traj_id_);
-  // displayTrajWithColor(traj_cmd_, 0.05, Eigen::Vector4d(0, 1, 0, 1), pub_traj_id_);
-  displayTrajWithColor(traj_cmd_, 0.05, Eigen::Vector4d(0, 0, 1, 1), pub_traj_id_);
-
-  // displayTrajWithColor(traj_real_, 0.03, Eigen::Vector4d(0.925, 0.054, 0.964,
-  // 1),
-  //                      1);
-}
-
-void bsplineCallback(const bspline::BsplineConstPtr& msg) {
-  // Received traj should have ascending traj_id
-  if (msg->traj_id <= traj_id_) {
-    ROS_ERROR("out of order bspline.");
+void splineCallback(const bspline::BsplineConstPtr& msg) {
+  if (have_closed_context && sameContext(msg->context, closed_context)) {
+    TrajectorySlot rejected;
+    rejected.context = msg->context;
+    rejected.id = msg->traj_id > 0 ? static_cast<uint64_t>(msg->traj_id) : 0;
+    publishStatus(rejected, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                  "trajectory belongs to a closed mission batch");
     return;
   }
-
-  // Parse the msg
-  Eigen::MatrixXd pos_pts(msg->pos_pts.size(), 3);
-  Eigen::VectorXd knots(msg->knots.size());
-  for (int i = 0; i < msg->knots.size(); ++i) {
-    knots(i) = msg->knots[i];
+  // Trajectory ids are monotonic only within one task batch. A new task may
+  // restart numbering without being compared with the previous task.
+  const uint64_t greatest_id = std::max(
+      active.valid && sameContext(active.context, msg->context) ? active.id : 0,
+      pending.valid && sameContext(pending.context, msg->context) ? pending.id : 0);
+  TrajectorySlot candidate;
+  if (msg->traj_id <= 0 || static_cast<uint64_t>(msg->traj_id) <= greatest_id ||
+      !parseSpline(*msg, candidate)) {
+    candidate.context = msg->context;
+    candidate.id = msg->traj_id > 0 ? static_cast<uint64_t>(msg->traj_id) : 0;
+    publishStatus(candidate, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                  "invalid, unauthorized, or non-increasing B-spline");
+    return;
   }
-  for (int i = 0; i < msg->pos_pts.size(); ++i) {
-    pos_pts(i, 0) = msg->pos_pts[i].x;
-    pos_pts(i, 1) = msg->pos_pts[i].y;
-    pos_pts(i, 2) = msg->pos_pts[i].z;
+  if (!continuousWithExecution(candidate)) {
+    publishStatus(candidate, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                  "trajectory does not match active position/velocity/acceleration at switch");
+    return;
   }
-  NonUniformBspline pos_traj(pos_pts, msg->order, 0.1);
-  pos_traj.setKnot(knots);
-
-  Eigen::MatrixXd yaw_pts(msg->yaw_pts.size(), 1);
-  for (int i = 0; i < msg->yaw_pts.size(); ++i)
-    yaw_pts(i, 0) = msg->yaw_pts[i];
-  NonUniformBspline yaw_traj(yaw_pts, 3, msg->yaw_dt);
-  start_time_ = msg->start_time;
-  traj_id_ = msg->traj_id;
-
-  traj_.clear();
-  traj_.push_back(pos_traj);
-  traj_.push_back(traj_[0].getDerivative());
-  traj_.push_back(traj_[1].getDerivative());
-  traj_.push_back(yaw_traj);
-  traj_.push_back(yaw_traj.getDerivative());
-  traj_.push_back(traj_[2].getDerivative());
-  traj_duration_ = traj_[0].getTimeSum();
-
-  receive_traj_ = true;
-
-  // Record the start time of flight
-  if (start_time.isZero()) {
-    ROS_WARN("start flight");
-    start_time = ros::Time::now();
-  }
+  pending = candidate;
+  publishStatus(pending, uav_mission_msgs::TrajectoryStatus::PENDING,
+                "trajectory validated; waiting for controller takeover confirmation");
 }
 
-void cmdCallback(const ros::TimerEvent& e) {
-  // No publishing before receive traj data
-  if (!receive_traj_) return;
-
-  ros::Time time_now = ros::Time::now();
-  double t_cur = (time_now - start_time_).toSec();
-  Eigen::Vector3d pos, vel, acc, jer = Eigen::Vector3d::Zero();
-  double yaw, yawdot;
-
-  if (t_cur < traj_duration_ && t_cur >= 0.0) {
-    // Current time within range of planned traj
-    pos = traj_[0].evaluateDeBoorT(t_cur);
-    vel = traj_[1].evaluateDeBoorT(t_cur);
-    acc = traj_[2].evaluateDeBoorT(t_cur);
-    yaw = traj_[3].evaluateDeBoorT(t_cur)[0];
-    yawdot = traj_[4].evaluateDeBoorT(t_cur)[0];
-    jer = traj_[5].evaluateDeBoorT(t_cur);
-  } else if (t_cur >= traj_duration_) {
-    // Current time exceed range of planned traj
-    // keep publishing the final position and yaw
-    pos = traj_[0].evaluateDeBoorT(traj_duration_);
-    vel.setZero();
-    acc.setZero();
-    yaw = traj_[3].evaluateDeBoorT(traj_duration_)[0];
-    yawdot = 0.0;
-
-    // Report info of the whole flight
-    double len = calcPathLength(traj_cmd_);
-    double flight_t = (end_time - start_time).toSec();
-    ROS_WARN_THROTTLE(2, "flight time: %lf, path length: %lf, mean vel: %lf, energy is: % lf ", flight_t,
-                      len, len / flight_t, energy);
-  } else {
-    return;  // Do not publish uninitialized commands before trajectory start.
-  }
-
-  if (isLoopCorrection) {
-    pos = R_loop.transpose() * (pos - T_loop);
-    vel = R_loop.transpose() * vel;
-    acc = R_loop.transpose() * acc;
-
-    Eigen::Vector3d yaw_dir(cos(yaw), sin(yaw), 0);
-    yaw_dir = R_loop.transpose() * yaw_dir;
-    yaw = atan2(yaw_dir[1], yaw_dir[0]);
-  }
-
-  cmd.header.stamp = time_now;
-  cmd.trajectory_id = traj_id_;
-  cmd.position.x = pos(0);
-  cmd.position.y = pos(1);
-  cmd.position.z = pos(2);
-  cmd.velocity.x = vel(0);
-  cmd.velocity.y = vel(1);
-  cmd.velocity.z = vel(2);
-  cmd.acceleration.x = acc(0);
-  cmd.acceleration.y = acc(1);
-  cmd.acceleration.z = acc(2);
-  cmd.yaw = yaw;
-  cmd.yaw_dot = yawdot;
-  pos_cmd_pub.publish(cmd);
-
-  // Draw cmd
-  // Eigen::Vector3d dir(cos(yaw), sin(yaw), 0.0);
-  // drawCmd(pos, 2 * dir, 2, Eigen::Vector4d(1, 1, 0, 0.7));
-  // drawCmd(pos, vel, 0, Eigen::Vector4d(0, 1, 0, 1));
-  // drawCmd(pos, acc, 1, Eigen::Vector4d(0, 0, 1, 1));
-  // drawCmd(pos, pos_err, 3, Eigen::Vector4d(1, 1, 0, 0.7));
-  percep_utils_->setPose(pos, yaw);
-  vector<Eigen::Vector3d> l1, l2;
-  percep_utils_->getFOV(l1, l2);
-  drawFOV(l1, l2);
-
-  // Record info of the executed traj
-  if (traj_cmd_.size() == 0) {
-    // Add the first position
-    traj_cmd_.push_back(pos);
-  } else if ((pos - traj_cmd_.back()).norm() > 1e-6) {
-    // Add new different commanded position
-    traj_cmd_.push_back(pos);
-    double dt = (time_now - last_time).toSec();
-    energy += jer.squaredNorm() * dt;
-    end_time = ros::Time::now();
-  }
-  last_time = time_now;
-
-  // if (traj_cmd_.size() > 100000)
-  //   traj_cmd_.erase(traj_cmd_.begin(), traj_cmd_.begin() + 1000);
+void authorizationCallback(const uav_mission_msgs::TaskContextConstPtr& msg) {
+  authorization = *msg;
+  if (have_closed_context && !sameContext(closed_context, authorization))
+    have_closed_context = false;
+  if (pending.valid && !sameContext(pending.context, authorization)) pending = TrajectorySlot{};
+  if (active.valid && !sameContext(active.context, authorization)) active = TrajectorySlot{};
+  if (braking && !sameContext(braking_context, authorization)) braking = false;
 }
 
-void test() {
-  // Test B-spline
-  // Generate the first B-spline's control points from a sin curve
-  vector<Eigen::Vector3d> samples;
-  const double dt1 = M_PI / 6.0;
-  for (double theta = 0; theta <= 2 * M_PI; theta += dt1) {
-    Eigen::Vector3d sample(theta, sin(theta), 1);
-    samples.push_back(sample);
+void ackCallback(const uav_mission_msgs::ControllerAckConstPtr& msg) {
+  if (pending.valid && sameContext(msg->context, pending.context) &&
+      msg->trajectory_id == pending.id && msg->accepted)
+    pending.controller_accepted = true;
+}
+
+void startBraking(const uav_mission_msgs::PlannerStatus& status) {
+  if (braking) return;
+  braking = true;
+  braking_started = ros::Time::now();
+  braking_position << odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z;
+  braking_velocity << odom.twist.twist.linear.x, odom.twist.twist.linear.y,
+      odom.twist.twist.linear.z;
+  braking_context = status.context;
+  braking_trajectory_id = status.trajectory_id != 0
+      ? status.trajectory_id : (active.valid ? active.id : 1);
+  const auto& q = odom.pose.pose.orientation;
+  braking_yaw = std::atan2(2.0 * (q.w * q.z + q.x * q.y),
+                           1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+  pending = TrajectorySlot{};
+  active = TrajectorySlot{};
+  TrajectorySlot invalid;
+  invalid.context = braking_context;
+  invalid.id = braking_trajectory_id;
+  publishStatus(invalid, uav_mission_msgs::TrajectoryStatus::INVALID,
+                "active path unsafe and no replacement exists; braking");
+}
+
+void plannerCallback(const uav_mission_msgs::PlannerStatusConstPtr& msg) {
+  if (msg->state == uav_mission_msgs::PlannerStatus::TRAJECTORY_UNSAFE &&
+      validContext(msg->context)) startBraking(*msg);
+}
+
+void clearForClosedContext(const uav_mission_msgs::TaskContext& context) {
+  closed_context = context;
+  have_closed_context = true;
+  active = TrajectorySlot{};
+  pending = TrajectorySlot{};
+  braking = false;
+}
+
+void missionCallback(const uav_mission_msgs::MissionCommandConstPtr& msg) {
+  if (!sameContext(msg->context, authorization)) return;
+  if (msg->command == uav_mission_msgs::MissionCommand::STOP ||
+      msg->command == uav_mission_msgs::MissionCommand::HOLD_HOME)
+    clearForClosedContext(msg->context);
+}
+
+void stopCallback(const std_msgs::EmptyConstPtr&) {
+  if (authorization.manager_epoch != 0) clearForClosedContext(authorization);
+}
+
+void replanCallback(const std_msgs::EmptyConstPtr&) {
+  ROS_DEBUG_THROTTLE(1.0, "Replan requested; retaining active trajectory until safe handover");
+}
+
+void odomCallback(const nav_msgs::OdometryConstPtr& msg) { odom = *msg; }
+
+void fillCommand(const uav_mission_msgs::TaskContext& context, uint64_t id,
+                 const Eigen::Vector3d& position, const Eigen::Vector3d& velocity,
+                 const Eigen::Vector3d& acceleration, double yaw, double yaw_rate,
+                 const ros::Time& now) {
+  command.header.stamp = now;
+  command.header.frame_id = world_frame;
+  command.context = context;
+  command.trajectory_id = static_cast<uint32_t>(id);
+  command.trajectory_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY;
+  command.position.x = position.x();
+  command.position.y = position.y();
+  command.position.z = position.z();
+  command.velocity.x = velocity.x();
+  command.velocity.y = velocity.y();
+  command.velocity.z = velocity.z();
+  command.acceleration.x = acceleration.x();
+  command.acceleration.y = acceleration.y();
+  command.acceleration.z = acceleration.z();
+  command.yaw = yaw;
+  command.yaw_dot = yaw_rate;
+  command_pub.publish(command);
+}
+
+void commandCallback(const ros::TimerEvent&) {
+  const ros::Time now = ros::Time::now();
+  if (pending.valid) {
+    publishStatus(pending, uav_mission_msgs::TrajectoryStatus::PENDING,
+                  "waiting for controller takeover confirmation");
+    if (!pending.controller_accepted &&
+        (now - pending.received_at).toSec() > handover_timeout) {
+      publishStatus(pending, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                    "controller handover confirmation timed out");
+      pending = TrajectorySlot{};
+    } else if (pending.controller_accepted && now >= pending.start_time) {
+      active = pending;
+      pending = TrajectorySlot{};
+      braking = false;  // A validated replacement resumes return after braking.
+      publishStatus(active, uav_mission_msgs::TrajectoryStatus::ACTIVE,
+                    "controller confirmed; switched at agreed start time");
+    }
   }
-  Eigen::MatrixXd points(samples.size(), 3);
-  for (int i = 0; i < samples.size(); ++i)
-    points.row(i) = samples[i].transpose();
-
-  Eigen::VectorXd times(samples.size() - 1);
-  times.setConstant(dt1);
-  times[0] += dt1;
-  times[times.rows() - 1] += dt1;
-  Eigen::Vector3d zero(0, 0, 0);
-
-  PolynomialTraj poly;
-  PolynomialTraj::waypointsTraj(points, zero, zero, zero, zero, times, poly);
-
-  const int degree = 5;
-  double duration = poly.getTotalTime();
-  vector<Eigen::Vector3d> traj_pts;
-  for (double ts = 0; ts <= duration; ts += 0.01)
-    traj_pts.push_back(poly.evaluate(ts, 0));
-  // displayTrajWithColor(traj_pts, 0.05, Eigen::Vector4d(1, 0, 0, 1), 99);
-
-  // Fit the polynomialw with B-spline
-  const int seg_num = 30;
-  double dt = duration / seg_num;
-  vector<Eigen::Vector3d> point_set, boundary_der;
-  for (double ts = 0; ts <= 1e-3 + duration; ts += dt)
-    point_set.push_back(poly.evaluate(ts, 0));
-
-  boundary_der.push_back(poly.evaluate(0, 1));
-  boundary_der.push_back(poly.evaluate(duration, 1));
-  boundary_der.push_back(poly.evaluate(0, 2));
-  boundary_der.push_back(poly.evaluate(duration, 2));
-
-  Eigen::MatrixXd ctrl_pts;
-  NonUniformBspline::parameterizeToBspline(dt, point_set, boundary_der, degree, ctrl_pts);
-  NonUniformBspline fitted(ctrl_pts, degree, dt);
-
-  traj_pts.clear();
-  double duration2 = fitted.getTimeSum();
-  for (double ts = 0; ts <= duration2; ts += 0.01)
-    traj_pts.push_back(fitted.evaluateDeBoorT(ts));
-
-  vector<Eigen::Vector3d> ctrl_pts_vec;
-  for (int i = 0; i < ctrl_pts.rows(); ++i) {
-    Eigen::Vector3d pr = ctrl_pts.row(i).transpose();
-    ctrl_pts_vec.push_back(pr);
+  if (braking) {
+    Eigen::Vector3d position, velocity, acceleration;
+    evaluateBraking(now, position, velocity, acceleration);
+    fillCommand(braking_context, braking_trajectory_id, position, velocity, acceleration,
+                braking_yaw, 0.0, now);
+    return;
   }
-  displayTrajWithColor(ctrl_pts_vec, 0.1, Eigen::Vector4d(1, 1, 0, 1), 98);
-  displayTrajWithColor(traj_pts, 0.05, Eigen::Vector4d(1, 0, 0, 1), 99);
+  if (!active.valid || now < active.start_time) return;
 
-  auto vel = fitted.getDerivative();
-  auto acc = vel.getDerivative();
-
-  ros::Duration(0.1).sleep();
-
-  // Pub the traj
-  auto t1 = ros::Time::now();
-  double tn = (ros::Time::now() - t1).toSec();
-  while (tn < duration && ros::ok()) {
-    // Eigen::Vector3d p = bspline.evaluateDeBoorT(tn);
-    // Eigen::Vector3d v = vel.evaluateDeBoorT(tn);
-    // Eigen::Vector3d a = acc.evaluateDeBoorT(tn);
-    Eigen::Vector3d p = fitted.evaluateDeBoorT(tn);
-    Eigen::Vector3d v = vel.evaluateDeBoorT(tn);
-    Eigen::Vector3d a = acc.evaluateDeBoorT(tn);
-
-    cmd.header.stamp = ros::Time::now();
-    cmd.position.x = p(0);
-    cmd.position.y = p(1);
-    cmd.position.z = p(2);
-    cmd.velocity.x = v(0);
-    cmd.velocity.y = v(1);
-    cmd.velocity.z = v(2);
-    cmd.acceleration.x = a(0);
-    cmd.acceleration.y = a(1);
-    cmd.acceleration.z = a(2);
-    pos_cmd_pub.publish(cmd);
-
-    ros::Duration(0.02).sleep();
-    tn = (ros::Time::now() - t1).toSec();
+  Eigen::Vector3d position, velocity, acceleration;
+  double yaw = 0.0, yaw_rate = 0.0;
+  evaluate(active, now, position, velocity, acceleration, yaw, yaw_rate);
+  if (!position.allFinite() || !velocity.allFinite() || !acceleration.allFinite() ||
+      !std::isfinite(yaw) || !std::isfinite(yaw_rate)) {
+    publishStatus(active, uav_mission_msgs::TrajectoryStatus::INVALID,
+                  "non-finite active trajectory state");
+    active = TrajectorySlot{};
+    return;
+  }
+  fillCommand(active.context, active.id, position, velocity, acceleration, yaw, yaw_rate, now);
+  if ((now - active.start_time).toSec() >= active.duration && !active.completion_reported) {
+    active.completion_reported = true;
+    publishStatus(active, uav_mission_msgs::TrajectoryStatus::COMPLETED,
+                  "trajectory segment completed; endpoint hold remains active");
   }
 }
+}  // namespace
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "traj_server");
   ros::NodeHandle node;
   ros::NodeHandle nh("~");
 
-  ros::Subscriber stop_sub = node.subscribe<std_msgs::Empty>("/fuel/stop_planner", 1,
-      +[](const std_msgs::Empty::ConstPtr&) { receive_traj_ = false; });
-  ros::Subscriber bspline_sub = node.subscribe("planning/bspline", 10, bsplineCallback);
-  ros::Subscriber replan_sub = node.subscribe("planning/replan", 10, replanCallback);
-  ros::Subscriber new_sub = node.subscribe("planning/new", 10, newCallback);
-  ros::Subscriber odom_sub = node.subscribe("/odom_world", 50, odomCallbck);
-  ros::Subscriber pg_T_vio_sub = node.subscribe("/loop_fusion/pg_T_vio", 10, pgTVioCallback);
+  nh.param<std::string>("world_frame", world_frame, "world");
+  nh.param<std::string>("source_id", source_id, "fuel_planner");
+  nh.param("trajectory_handover/position_tolerance", position_switch_tolerance, 0.75);
+  nh.param("trajectory_handover/velocity_tolerance", velocity_switch_tolerance, 1.0);
+  nh.param("trajectory_handover/acceleration_tolerance", acceleration_switch_tolerance, 2.0);
+  nh.param("trajectory_handover/timeout", handover_timeout, 2.0);
+  nh.param("manager/max_acc", braking_acceleration, 1.0);
+  if (position_switch_tolerance <= 0.0 || velocity_switch_tolerance <= 0.0 ||
+      acceleration_switch_tolerance <= 0.0 || handover_timeout <= 0.0 ||
+      braking_acceleration <= 0.0 || source_id.empty())
+    throw std::invalid_argument("invalid trajectory handover/braking parameters");
 
-  cmd_vis_pub = node.advertise<visualization_msgs::Marker>("planning/position_cmd_vis", 10);
-  pos_cmd_pub = node.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
-  traj_pub = node.advertise<visualization_msgs::Marker>("planning/travel_traj", 10);
+  auto spline_sub = node.subscribe("planning/bspline", 10, splineCallback);
+  auto replan_sub = node.subscribe<std_msgs::Empty>("planning/replan", 10, replanCallback);
+  auto stop_sub = node.subscribe<std_msgs::Empty>("/fuel/stop_planner", 10, stopCallback);
+  auto odom_sub = node.subscribe<nav_msgs::Odometry>("/odom_world", 50, odomCallback);
+  auto authorization_sub = node.subscribe<uav_mission_msgs::TaskContext>(
+      "/fuel/authorized_context", 10, authorizationCallback);
+  auto ack_sub = node.subscribe<uav_mission_msgs::ControllerAck>(
+      "/fuel/controller_ack", 20, ackCallback);
+  auto planner_sub = node.subscribe<uav_mission_msgs::PlannerStatus>(
+      "/fuel/planner_status", 20, plannerCallback);
+  auto mission_sub = node.subscribe<uav_mission_msgs::MissionCommand>(
+      "/fuel/mission_command", 20, missionCallback);
 
-  ros::Timer cmd_timer = node.createTimer(ros::Duration(0.01), cmdCallback);
-  ros::Timer vis_timer = node.createTimer(ros::Duration(0.25), visCallback);
+  command_pub = node.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
+  status_pub = node.advertise<uav_mission_msgs::TrajectoryStatus>("/fuel/trajectory_status", 20);
+  auto command_timer = node.createTimer(ros::Duration(0.01), commandCallback);
 
-  nh.param("traj_server/pub_traj_id", pub_traj_id_, -1);
-  nh.param("fsm/replan_time", replan_time_, 0.1);
-  nh.param("loop_correction/isLoopCorrection", isLoopCorrection, false);
-
-  Eigen::Vector3d init_pos;
-  nh.param("traj_server/init_x", init_pos[0], 0.0);
-  nh.param("traj_server/init_y", init_pos[1], 0.0);
-  nh.param("traj_server/init_z", init_pos[2], 0.0);
-
-  ROS_WARN("[Traj server]: init...");
-  ros::Duration(1.0).sleep();
-
-  // Control parameter
-  cmd.kx = { 5.7, 5.7, 6.2 };
-  cmd.kv = { 3.4, 3.4, 4.0 };
-
-  std::cout << start_time.toSec() << std::endl;
-  std::cout << end_time.toSec() << std::endl;
-
-  cmd.header.stamp = ros::Time::now();
-  cmd.header.frame_id = "world";
-  cmd.trajectory_flag = quadrotor_msgs::PositionCommand::TRAJECTORY_STATUS_READY;
-  cmd.trajectory_id = traj_id_;
-  cmd.position.x = init_pos[0];
-  cmd.position.y = init_pos[1];
-  cmd.position.z = init_pos[2];
-  cmd.velocity.x = 0.0;
-  cmd.velocity.y = 0.0;
-  cmd.velocity.z = 0.0;
-  cmd.acceleration.x = 0.0;
-  cmd.acceleration.y = 0.0;
-  cmd.acceleration.z = 0.0;
-  cmd.yaw = 0.0;
-  cmd.yaw_dot = 0.0;
-
-  percep_utils_.reset(new PerceptionUtils(nh));
-
-  // test();
-  // Gazebo/PX4 takeoff is handled by Prometheus, never by this server.
-
-  R_loop = Eigen::Quaterniond(1, 0, 0, 0).toRotationMatrix();
-  T_loop = Eigen::Vector3d(0, 0, 0);
-
-  ROS_WARN("[Traj server]: ready.");
+  command.kx = {5.7, 5.7, 6.2};
+  command.kv = {3.4, 3.4, 4.0};
+  ROS_WARN("[Traj server]: active/pending handover ready; normal replans retain active trajectories");
   ros::spin();
-
   return 0;
 }

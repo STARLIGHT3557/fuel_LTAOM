@@ -88,7 +88,6 @@ void FastExplorationManager::initialize(ros::NodeHandle& nh) {
 int FastExplorationManager::planExploreMotion(
     const Vector3d& pos, const Vector3d& vel, const Vector3d& acc, const Vector3d& yaw) {
   ros::Time t1 = ros::Time::now();
-  auto t2 = t1;
   ed_->views_.clear();
   ed_->global_tour_.clear();
 
@@ -222,73 +221,101 @@ int FastExplorationManager::planExploreMotion(
     ROS_ERROR("Empty destination.");
 
   std::cout << "Next view: " << next_pos.transpose() << ", " << next_yaw << std::endl;
+  return planToGoal(pos, vel, acc, yaw, next_pos, next_yaw);
 
-  // Plan trajectory (position and yaw) to the next viewpoint
-  t1 = ros::Time::now();
+}
 
-  // Compute time lower bound of yaw and use in trajectory generation
-  double diff = fabs(next_yaw - yaw[0]);
-  double time_lb = min(diff, 2 * M_PI - diff) / ViewNode::yd_;
+int FastExplorationManager::planToGoal(const Vector3d& pos, const Vector3d& vel,
+    const Vector3d& acc, const Vector3d& yaw, const Vector3d& goal, double goal_yaw,
+    double segment_length, bool recovery) {
+  if (!pos.allFinite() || !vel.allFinite() || !acc.allFinite() || !yaw.allFinite() ||
+      !goal.allFinite() || !std::isfinite(goal_yaw)) {
+    ROS_ERROR("Non-finite state or goal passed to planToGoal");
+    return FAIL;
+  }
+  if (!sdf_map_->isInBox(goal) || sdf_map_->getOccupancy(goal) != SDFMap::FREE ||
+      sdf_map_->getInflateOccupancy(goal) != 0) {
+    ROS_ERROR_STREAM("Goal is outside bounds, occupied, inflated, or unknown: " << goal.transpose());
+    return FAIL;
+  }
+  // No new trajectory was produced here; never report success with stale data.
+  if ((pos - goal).norm() < 0.05) return FAIL;
 
-  // Generate trajectory of x,y,z
+  const double diff = std::fabs(goal_yaw - yaw[0]);
+  const double time_lb = std::min(diff, 2 * M_PI - diff) / ViewNode::yd_;
   planner_manager_->path_finder_->reset();
-  if (planner_manager_->path_finder_->search(pos, next_pos) != Astar::REACH_END) {
-    ROS_ERROR("No path to next viewpoint");
+  if (planner_manager_->path_finder_->search(pos, goal) != Astar::REACH_END) {
+    ROS_ERROR_STREAM("No collision-free known-space path to goal " << goal.transpose());
     return FAIL;
   }
   ed_->path_next_goal_ = planner_manager_->path_finder_->getPath();
   shortenPath(ed_->path_next_goal_);
+  if (ed_->path_next_goal_.size() < 2) return FAIL;
 
-  const double radius_far = 5.0;
+  const double radius_far = std::max(0.5, segment_length);
   const double radius_close = 1.5;
   const double len = Astar::pathLength(ed_->path_next_goal_);
-  if (len < radius_close) {
-    // Next viewpoint is very close, no need to search kinodynamic path, just use waypoints-based
-    // optimization
+  if (len <= radius_far && (len < radius_close || recovery)) {
+    ed_->next_goal_ = goal;
     planner_manager_->planExploreTraj(ed_->path_next_goal_, vel, acc, time_lb);
-    ed_->next_goal_ = next_pos;
-
   } else if (len > radius_far) {
-    // Next viewpoint is far away, select intermediate goal on geometric path (this also deal with
-    // dead end)
-    std::cout << "Far goal." << std::endl;
-    double len2 = 0.0;
-    vector<Eigen::Vector3d> truncated_path = { ed_->path_next_goal_.front() };
-    for (int i = 1; i < ed_->path_next_goal_.size() && len2 < radius_far; ++i) {
-      auto cur_pt = ed_->path_next_goal_[i];
-      len2 += (cur_pt - truncated_path.back()).norm();
-      truncated_path.push_back(cur_pt);
+    double segment_len = 0.0;
+    vector<Vector3d> segment = {ed_->path_next_goal_.front()};
+    for (size_t i = 1; i < ed_->path_next_goal_.size() && segment_len < radius_far; ++i) {
+      const Vector3d delta = ed_->path_next_goal_[i] - segment.back();
+      const double length = delta.norm();
+      if (length < 1e-6) continue;
+      const double step = std::min(length, radius_far - segment_len);
+      segment.push_back(segment.back() + delta * (step / length));
+      segment_len += step;
     }
-    ed_->next_goal_ = truncated_path.back();
-    planner_manager_->planExploreTraj(truncated_path, vel, acc, time_lb);
-    // if (!planner_manager_->kinodynamicReplan(
-    //         pos, vel, acc, ed_->next_goal_, Vector3d(0, 0, 0), time_lb))
-    //   return FAIL;
-    // ed_->kino_path_ = planner_manager_->kino_path_finder_->getKinoTraj(0.02);
+    if (segment.size() < 2) return FAIL;
+    if (segment.size() == 2)
+      segment.insert(segment.begin() + 1, 0.5 * (segment.front() + segment.back()));
+    ed_->next_goal_ = segment.back();
+    planner_manager_->planExploreTraj(segment, vel, acc, time_lb);
   } else {
-    // Search kino path to exactly next viewpoint and optimize
-    std::cout << "Mid goal" << std::endl;
-    ed_->next_goal_ = next_pos;
-
+    ed_->next_goal_ = goal;
     if (!planner_manager_->kinodynamicReplan(
-            pos, vel, acc, ed_->next_goal_, Vector3d(0, 0, 0), time_lb))
-      return FAIL;
+            pos, vel, acc, goal, Vector3d::Zero(), time_lb)) return FAIL;
   }
 
-  if (planner_manager_->local_data_.position_traj_.getTimeSum() < time_lb - 0.1)
-    ROS_ERROR("Lower bound not satified!");
-
-  planner_manager_->planYawExplore(yaw, next_yaw, true, ep_->relax_time_);
-
-  double traj_plan_time = (ros::Time::now() - t1).toSec();
-  t1 = ros::Time::now();
-
-  double yaw_time = (ros::Time::now() - t1).toSec();
-  ROS_WARN("Traj: %lf, yaw: %lf", traj_plan_time, yaw_time);
-  double total = (ros::Time::now() - t2).toSec();
-  ROS_WARN("Total time: %lf", total);
-  ROS_ERROR_COND(total > 0.1, "Total time too long!!!");
-
+  auto& local = planner_manager_->local_data_;
+  auto& trajectory = local.position_traj_;
+  trajectory.setPhysicalLimits(planner_manager_->pp_.max_vel_, planner_manager_->pp_.max_acc_);
+  const double original_duration = trajectory.getTimeSum();
+  bool feasible = trajectory.checkFeasibility(false);
+  int reallocations = 0;
+  while (!feasible && reallocations < 10 && ros::ok()) {
+    trajectory.reallocateTime(false);
+    ++reallocations;
+    feasible = trajectory.checkFeasibility(false);
+  }
+  if (!feasible) {
+    ROS_ERROR("Optimized trajectory remains dynamically infeasible after time reallocation");
+    return FAIL;
+  }
+  if (reallocations > 0) {
+    // Knot changes preserve the spatial curve, but every cached derivative must
+    // follow the accepted timing before collision checks, replans and output.
+    local.velocity_traj_ = trajectory.getDerivative();
+    local.acceleration_traj_ = local.velocity_traj_.getDerivative();
+    local.start_pos_ = trajectory.evaluateDeBoorT(0.0);
+    local.duration_ = trajectory.getTimeSum();
+    ROS_WARN("Reallocated B-spline timing %d time(s): %.3f -> %.3f s",
+             reallocations, original_duration, local.duration_);
+  }
+  const double duration = trajectory.getTimeSum();
+  for (double t = 0.0; t <= duration + 1e-6; t += 0.05) {
+    const Vector3d sample = trajectory.evaluateDeBoorT(std::min(t, duration));
+    if (!sdf_map_->isInBox(sample) || sdf_map_->getOccupancy(sample) == SDFMap::UNKNOWN ||
+        sdf_map_->getInflateOccupancy(sample) != 0) {
+      ROS_ERROR_STREAM("Optimized trajectory leaves known collision-free bounds at "
+                       << sample.transpose());
+      return FAIL;
+    }
+  }
+  planner_manager_->planYawExplore(yaw, goal_yaw, true, ep_->relax_time_);
   return SUCCEED;
 }
 

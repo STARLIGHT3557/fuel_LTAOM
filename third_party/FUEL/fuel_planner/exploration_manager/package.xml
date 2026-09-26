@@ -61,6 +61,7 @@
   <build_depend>lkh_tsp_solver</build_depend>
   <build_depend>plan_manage</build_depend>
   <build_depend>quadrotor_msgs</build_depend>
+  <depend>uav_mission_msgs</depend>
 
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>

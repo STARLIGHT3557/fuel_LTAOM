@@ -10,24 +10,30 @@ from bspline.msg import Bspline
 from nav_msgs.msg import Odometry
 from uav_controller.msg import FlightStatus, TrajectorySetpoint
 from sensor_msgs import point_cloud2
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
+from uav_mission_msgs.msg import ControllerAck, PlannerStatus, TrajectoryStatus
 
 
 class PlannerTest(unittest.TestCase):
     def test_planner(self):
-        self.moves, self.splines, self.frontiers, self.maps = [], [], [], []
+        self.moves, self.splines, self.frontiers, self.maps, self.handoffs = [], [], [], [], []
+        self.planner_states = []
         subscribers = [
             rospy.Subscriber('/uav_controller/trajectory_setpoint', TrajectorySetpoint, self.moves.append),
             rospy.Subscriber('/planning/bspline', Bspline, self.splines.append),
             rospy.Subscriber('/planning_vis/frontier', Marker, self.frontiers.append),
             rospy.Subscriber('/sdf_map/occupancy_all', PointCloud2, self.maps.append),
+            rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, self.handoffs.append),
+            rospy.Subscriber('/fuel/planner_status', PlannerStatus, self.planner_states.append),
         ]
         odom_pub = rospy.Publisher('/fuel_test/odom', Odometry, queue_size=2)
         cloud_pub = rospy.Publisher('/fuel_test/cloud', PointCloud2, queue_size=2)
         state_pub = rospy.Publisher('/uav_controller/fsm_status', FlightStatus, queue_size=2)
+        battery_pub = rospy.Publisher('/fuel_test/battery', BatteryState, queue_size=2)
+        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=2)
         # Long returns let FUEL raycast free space to its 10 m range limit.
         # A small wall at x=4 provides occupied voxels without closing the room.
         points = []
@@ -55,7 +61,12 @@ class PlannerTest(unittest.TestCase):
             odom.pose.pose.orientation.w = 1
             odom_pub.publish(odom)
             state_pub.publish(FlightStatus(feedback_ready=True, output_policy="CLOSED_LOOP",
-                                           phase="HOLD", mission_id=42))
+                                           phase="HOLD"))
+            battery_pub.publish(BatteryState(header=Header(stamp=stamp), percentage=0.31))
+            if self.handoffs and self.handoffs[-1].state == TrajectoryStatus.PENDING:
+                handoff = self.handoffs[-1]
+                ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=handoff.context,
+                                              trajectory_id=handoff.trajectory_id, accepted=True))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id='uav1/lidar_link'), points))
 
@@ -77,6 +88,16 @@ class PlannerTest(unittest.TestCase):
                 time.sleep(0.1)
             self.assertTrue(self.splines, 'FUEL produced no B-spline')
             self.assertTrue(any(not c.finished for c in self.moves), 'No controller command')
+            deadline = time.monotonic() + 2
+            while (time.monotonic() < deadline and
+                   not any(s.state == PlannerStatus.EXECUTING for s in self.planner_states)):
+                time.sleep(0.05)
+            self.assertTrue(any(s.state == PlannerStatus.TRAJECTORY_READY
+                                for s in self.planner_states),
+                            'Planner did not report an independently observable ready state')
+            self.assertTrue(any(s.state == PlannerStatus.EXECUTING
+                                for s in self.planner_states),
+                            'Planner did not publish its execution heartbeat')
             for marker in self.frontiers:
                 if marker.action == Marker.ADD:
                     self.assertTrue(marker.points, 'RViz rejects an empty frontier ADD marker')

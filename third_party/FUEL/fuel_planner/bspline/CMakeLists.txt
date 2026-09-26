@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   plan_env
   cv_bridge
   message_generation
+  uav_mission_msgs
 )
 
 # Generate messages in the 'msg' folder
@@ -30,13 +31,14 @@ generate_messages(
   DEPENDENCIES
   std_msgs
   geometry_msgs
+  uav_mission_msgs
 )
 
 
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES bspline
- CATKIN_DEPENDS message_runtime
+ CATKIN_DEPENDS message_runtime uav_mission_msgs
 #  DEPENDS system_lib
 )
 

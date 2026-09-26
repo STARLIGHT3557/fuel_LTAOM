@@ -23,13 +23,14 @@ find_package(catkin REQUIRED COMPONENTS
   traj_utils
   active_perception
   cv_bridge
+  uav_mission_msgs
 )
 
 
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES plan_manage
- CATKIN_DEPENDS plan_env path_searching bspline bspline_opt active_perception traj_utils)
+ CATKIN_DEPENDS plan_env path_searching bspline bspline_opt active_perception traj_utils uav_mission_msgs)
 
 include_directories(
   include
