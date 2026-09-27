@@ -16,6 +16,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh) {
   fp_.reset(new FSMParam);
   fd_.reset(new FSMData);
 
+  nh.param("odom_twist_in_body", odom_twist_in_body_, false);
   /*  Fsm param  */
   nh.param("fsm/thresh_replan1", fp_->replan_thresh1_, -1.0);
   nh.param("fsm/thresh_replan2", fp_->replan_thresh2_, -1.0);
@@ -111,21 +112,6 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
     case PLAN_TRAJ: {
       const ros::Time now = ros::Time::now();
       if (!next_plan_attempt_.isZero() && now < next_plan_attempt_) break;
-      if (return_home_ && (fd_->odom_pos_ - return_goal_).norm() <= home_tolerance_) {
-        if (fd_->odom_vel_.norm() <= home_speed_tolerance_) {
-          publishPlannerStatus(uav_mission_msgs::PlannerStatus::GOAL_REACHED,
-                               "return goal reached at low speed; manager verifies stability");
-          transitState(FINISH, "home reached and slow");
-        } else if (last_execution_status_.isZero() || now < last_execution_status_ ||
-                   (now - last_execution_status_).toSec() >= 0.5) {
-          // Passing through the home sphere is not arrival. Keep the active
-          // segment executing until it slows, or plan again after it leaves.
-          publishPlannerStatus(uav_mission_msgs::PlannerStatus::EXECUTING,
-                               "inside home tolerance but still moving");
-          last_execution_status_ = now;
-        }
-        break;
-      }
       if (fd_->static_state_ || !executing_traj_ || active_trajectory_unsafe_) {
         fd_->start_pt_ = fd_->odom_pos_;
         fd_->start_vel_ = fd_->odom_vel_;
@@ -208,9 +194,14 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
       const ros::Time now = ros::Time::now();
       if (last_execution_status_.isZero() || now < last_execution_status_ ||
           (now - last_execution_status_).toSec() >= 0.5) {
-        publishPlannerStatus(uav_mission_msgs::PlannerStatus::EXECUTING,
-                             return_home_ ? "executing return trajectory"
-                                          : "executing exploration trajectory");
+        const bool settled = return_home_ && executing_traj_ && executing_traj_->terminal_return_ &&
+            !active_trajectory_unsafe_ && (now - executing_traj_->start_time_).toSec() >= executing_traj_->duration_;
+        publishPlannerStatus(settled ? uav_mission_msgs::PlannerStatus::GOAL_REACHED
+                                     : (return_home_ && executing_traj_ && executing_traj_->terminal_return_
+                                        ? uav_mission_msgs::PlannerStatus::SETTLING
+                                        : uav_mission_msgs::PlannerStatus::EXECUTING),
+                             settled ? "terminal reference settled; verifying actual arrival" :
+                             (return_home_ ? "executing return trajectory" : "executing exploration trajectory"));
         last_execution_status_ = now;
       }
       LocalTrajData* info = executing_traj_.get();
@@ -221,6 +212,30 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
       }
       double t_cur = (now - info->start_time_).toSec();
 
+      if (return_home_ && info->terminal_return_ && !active_trajectory_unsafe_) {
+        // Let a safe terminal trajectory settle. Collision checking continues
+        // in safetyCallback; large tracking errors request measured-state recovery.
+        const double t = std::max(0.0, std::min(t_cur, info->duration_));
+        const double tracking_error = (fd_->odom_pos_ - info->position_traj_.evaluateDeBoorT(t)).norm();
+        const bool convergence_timeout = t_cur > info->duration_ + 3.0 &&
+            ((fd_->odom_pos_ - return_goal_).norm() > home_tolerance_ ||
+             fd_->odom_vel_.norm() > home_speed_tolerance_ || std::abs(fd_->odom_yaw_) > 0.08);
+        if (tracking_error > 0.6) {
+          if (terminal_error_since_.isZero()) terminal_error_since_ = now;
+        } else terminal_error_since_ = ros::Time();
+        const bool tracking_failure = !terminal_error_since_.isZero() &&
+            (now - terminal_error_since_).toSec() >= 0.5;
+        if (tracking_failure || convergence_timeout) {
+          // Recovery starts from measured state: brake first so a discontinuous
+          // replacement cannot jump directly from the old reference to odometry.
+          active_trajectory_unsafe_ = true;
+          fd_->static_state_ = true;
+          publishPlannerStatus(uav_mission_msgs::PlannerStatus::TRAJECTORY_UNSAFE,
+                               "terminal tracking recovery; brake and replan");
+          transitState(PLAN_TRAJ, "terminal tracking recovery");
+        }
+        break;
+      }
       // Replan if traj is almost fully executed
       double time_to_end = info->duration_ - t_cur;
       if (time_to_end < fp_->replan_thresh1_) {
@@ -254,8 +269,8 @@ int FastExplorationFSM::callExplorationPlanner() {
   const double segment_length = std::max(1.0, 5.0 / (1.0 + std::min(plan_failures_, 4)));
   int res = return_home_
       ? expl_manager_->planToGoal(fd_->start_pt_, fd_->start_vel_, fd_->start_acc_,
-                                  fd_->start_yaw_, return_goal_, fd_->start_yaw_[0],
-                                  segment_length, plan_failures_ > 0)
+                                  fd_->start_yaw_, return_goal_, 0.0,
+                                  segment_length, plan_failures_ > 0, true)
       : expl_manager_->planExploreMotion(fd_->start_pt_, fd_->start_vel_, fd_->start_acc_,
                                          fd_->start_yaw_);
   classic_ = false;
@@ -486,6 +501,10 @@ void FastExplorationFSM::missionCallback(
     if (!current || !return_home_ || have_closed_context_) return;
     // Keep the batch and recovery history. Rebase on the real aircraft after
     // a transport timeout/rejection instead of extrapolating a rejected spline.
+    if (state_ == EXEC_TRAJ && executing_traj_ && executing_traj_->terminal_return_ &&
+        !active_trajectory_unsafe_ &&
+        (ros::Time::now() - executing_traj_->start_time_).toSec() < executing_traj_->duration_ + 3.0)
+      return;
     fd_->static_state_ = true;
     if (state_ != PLAN_TRAJ && state_ != WAIT_EXEC && state_ != PUB_TRAJ) {
       next_plan_attempt_ = ros::Time::now();
@@ -538,6 +557,7 @@ void FastExplorationFSM::trajectoryCallback(
   if (msg->state == uav_mission_msgs::TrajectoryStatus::ACTIVE && submitted_traj_ &&
       msg->trajectory_id == static_cast<uint64_t>(submitted_traj_->traj_id_)) {
     executing_traj_ = submitted_traj_;
+    terminal_error_since_ = ros::Time();
     submitted_traj_.reset();
     plan_failures_ = 0;
     active_trajectory_unsafe_ = false;
@@ -602,6 +622,10 @@ void FastExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
   fd_->odom_orient_.y() = msg->pose.pose.orientation.y;
   fd_->odom_orient_.z() = msg->pose.pose.orientation.z;
 
+  if (!fd_->odom_orient_.coeffs().allFinite() || fd_->odom_orient_.norm() < 1e-6 ||
+      !fd_->odom_pos_.allFinite() || !fd_->odom_vel_.allFinite()) return;
+  fd_->odom_orient_.normalize();
+  if (odom_twist_in_body_) fd_->odom_vel_ = fd_->odom_orient_ * fd_->odom_vel_;
   Eigen::Vector3d rot_x = fd_->odom_orient_.toRotationMatrix().block<3, 1>(0, 0);
   fd_->odom_yaw_ = atan2(rot_x(1), rot_x(0));
 

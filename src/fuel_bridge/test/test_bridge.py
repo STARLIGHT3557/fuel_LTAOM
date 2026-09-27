@@ -15,7 +15,7 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from uav_controller.msg import FlightStatus, TrajectorySetpoint
-from uav_mission_msgs.msg import ControllerAck, MissionStatus, TaskContext
+from uav_mission_msgs.msg import ControllerAck, MissionStatus, TaskContext, PlannerStatus
 from visualization_msgs.msg import Marker
 
 
@@ -45,6 +45,7 @@ class BridgeTest(unittest.TestCase):
         battery_pub = rospy.Publisher('/fuel/battery', BatteryState, queue_size=2)
         cmd_pub = rospy.Publisher('/fuel/position_cmd', PositionCommand, queue_size=2)
         ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=2)
+        planner_pub = rospy.Publisher('/fuel/planner_status', PlannerStatus, queue_size=2)
         goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
         for service in ('/fuel/start', '/fuel/stop', '/fuel/return_home'):
             rospy.wait_for_service(service, timeout=10)
@@ -54,15 +55,16 @@ class BridgeTest(unittest.TestCase):
         self.assertFalse(start().success)
 
         def feed(ready=True, frame='uav1/lidar_link', x=2.0, y=3.0, z=1.5,
-                 vx=0.0, battery=0.31):
+                 vx=0.0, battery=0.31, yaw=math.pi/2, yaw_rate=0.0, settled=False):
             stamp = rospy.Time.now()
             odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
             odom.pose.pose.position.x = x
             odom.pose.pose.position.y = y
             odom.pose.pose.position.z = z
             odom.twist.twist.linear.x = vx
-            odom.pose.pose.orientation.z = math.sqrt(0.5)
-            odom.pose.pose.orientation.w = math.sqrt(0.5)
+            odom.twist.twist.angular.z = yaw_rate
+            odom.pose.pose.orientation.z = math.sin(yaw/2)
+            odom.pose.pose.orientation.w = math.cos(yaw/2)
             state = FlightStatus(feedback_ready=ready,
                                  output_policy='CLOSED_LOOP' if ready else 'NO_OUTPUT',
                                  phase='HOLD' if ready else 'WAIT')
@@ -70,6 +72,9 @@ class BridgeTest(unittest.TestCase):
             cloud = point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id=frame),
                 [(1, 0, 0), (40, 0, 0), (0, 0, 0), (float('nan'), 1, 1)])
+            if settled:
+                planner_pub.publish(PlannerStatus(header=Header(stamp=stamp), context=returning,
+                                    trajectory_id=1, state=PlannerStatus.GOAL_REACHED))
             odom_pub.publish(odom)
             state_pub.publish(state)
             battery_pub.publish(charge)
@@ -172,13 +177,27 @@ class BridgeTest(unittest.TestCase):
         self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
                       message='controller acknowledgement did not enter RETURNING')
         for _ in range(12):
-            feed(x=0.0, y=0.0, z=1.0)
+            feed(x=0.0, y=0.0, z=1.0, yaw=0.0)
+        self.assertNotEqual(statuses[-1].state, MissionStatus.HOME_HOLD,
+                            'Physical arrival must not bypass an unfinished reference')
+        for _ in range(12):
+            feed(x=0.0, y=0.0, z=1.0, settled=True)
+        self.assertNotEqual(statuses[-1].state, MissionStatus.HOME_HOLD,
+                            'Position alone must not complete return with nonzero yaw')
+        for _ in range(12):
+            feed(x=0.0, y=0.0, z=1.0, yaw=0.0, yaw_rate=0.5, settled=True)
+        self.assertNotEqual(statuses[-1].state, MissionStatus.HOME_HOLD,
+                            'Passing through zero yaw while rotating is not stable arrival')
+        for _ in range(12):
+            feed(x=0.0, y=0.0, z=1.0, yaw=0.0, settled=True)
         self.wait_for(lambda: statuses[-1].state == MissionStatus.HOME_HOLD,
                       message='stable physical home did not produce HOME_HOLD')
         self.assertEqual(statuses[-1].return_reason, MissionStatus.MANUAL_RETURN)
         self.wait_for(lambda: commands and commands[-1].finished,
                       message='HOME_HOLD did not issue a finished home setpoint')
         self.assertAlmostEqual(commands[-1].position.z, 1.0)
+        # Completion follows both terminal reference and actual yaw convergence.
+        self.assertAlmostEqual(commands[-1].yaw, 0.0)
         self.assertTrue(statuses[-1].mission_done)
 
         self.assertTrue(stop().success)

@@ -8,6 +8,7 @@ import unittest
 import rospy
 import rostest
 from nav_msgs.msg import Odometry
+from bspline.msg import Bspline
 from sensor_msgs import point_cloud2
 from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
@@ -27,8 +28,9 @@ class PersistentReturnPlannerTest(unittest.TestCase):
         self.fail(message)
 
     def test_map_recovery(self):
-        statuses, planning, handoffs, commands, maps = [], [], [], [], []
+        statuses, planning, handoffs, commands, maps, splines = [], [], [], [], [], []
         subscribers = [
+            rospy.Subscriber("/planning/bspline", Bspline, splines.append),
             rospy.Subscriber('/fuel/mission_status', MissionStatus, statuses.append),
             rospy.Subscriber('/fuel/planner_status', PlannerStatus, planning.append),
             rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, handoffs.append),
@@ -65,7 +67,7 @@ class PersistentReturnPlannerTest(unittest.TestCase):
             for x, y, z, dx, dz in directions:
                 distance = 12.0
                 if blocked[0] and dx > 0.01:
-                    wall = (4.0 - 0.1471448904) / dx
+                    wall = (3.0 - 0.1471448904) / dx
                     if abs(wall*y) < 1.5 and 0.0 < height + 0.2769686356 + wall*dz < 3.0:
                         distance = min(distance, wall)
                 # Model a floor return. Rays ending below the map's ground
@@ -101,6 +103,15 @@ class PersistentReturnPlannerTest(unittest.TestCase):
             self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
                           'recovered execution was not acknowledged')
             self.assertEqual(statuses[-1].context, context)
+            terminal = next(b for b in splines if b.context == context)
+            self.assertGreaterEqual(terminal.knots[-terminal.order-1] - terminal.knots[terminal.order], 2.0)
+            # Repeated final control points enforce exact home and zero v/a.
+            for point in terminal.pos_pts[-3:]:
+                self.assertAlmostEqual(point.x, 3.0, places=6)
+                self.assertAlmostEqual(point.y, 0.0, places=6)
+                self.assertAlmostEqual(point.z, 1.0, places=6)
+            for heading in terminal.yaw_pts[-3:]:
+                self.assertAlmostEqual(heading, 0.0, places=6)
             self.assertTrue(any(s.context == context and s.state == PlannerStatus.TRAJECTORY_READY
                                 for s in planning))
             self.assertTrue(rospy.ServiceProxy('/fuel/stop', Trigger)().success)

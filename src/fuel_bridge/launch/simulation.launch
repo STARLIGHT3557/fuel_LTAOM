@@ -20,7 +20,7 @@
   <arg name="box_max_y" default="$(eval {'cylinder': 10.0, 'indoor4': 13.0}[arg('scene')] - float(arg('spawn_y')))"/>
   <!-- Keep indoor flight goals below the 2.5 m maze walls. -->
   <arg name="box_max_z" default="$(eval {'cylinder': 2.5, 'indoor4': 2.0}[arg('scene')])"/>
-  <arg name="max_vel" default="3.0"/>
+  <arg name="max_vel" default="2.0"/>
   <arg name="max_acc" default="2.0"/>
   <arg name="gui" default="true"/>
   <arg name="rviz" default="true"/>

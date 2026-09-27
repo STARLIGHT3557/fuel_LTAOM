@@ -1,0 +1,4 @@
+[submodule "src/uav_controller"]
+	path = src/uav_controller
+	url = git@gitee.com:starsarebright/uav_controller.git
+	branch = ros1

@@ -50,8 +50,10 @@ class ReturnRecoveryTest(unittest.TestCase):
             stamp = rospy.Time.now()
             odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
             odom.pose.pose.position = Point(2.0, 0.0, 1.0)
-            odom.pose.pose.orientation.w = 1.0
-            odom.twist.twist.linear.x = velocity[0]
+            # At yaw +90 degrees, body -Y is world +X.
+            odom.pose.pose.orientation.w = 0.7071067811865476
+            odom.pose.pose.orientation.z = 0.7071067811865476
+            odom.twist.twist.linear.y = -velocity[0]
             odom_pub.publish(odom)
             state_pub.publish(FlightStatus(header=Header(stamp=stamp), feedback_ready=True,
                                            output_policy='CLOSED_LOOP', phase='HOLD'))
@@ -113,6 +115,9 @@ class ReturnRecoveryTest(unittest.TestCase):
             self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURN_RECOVERY,
                           'unsafe execution must preserve the return task')
             time.sleep(0.5)
+            self.assertTrue(any(abs(p.position.x - 2.08) < 1e-4 and
+                                abs(p.position.y) < 1e-4 and not p.finished for p in points),
+                            'Body-frame velocity was not rotated before world-frame braking')
             velocity[0] = 0.0
             send_spline(2, 2.08)  # v^2/(2a) = 0.08 m at the default 1 m/s^2 brake.
             self.wait_for(lambda: any(p.trajectory_id == 2 and not p.finished for p in points),

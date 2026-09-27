@@ -34,6 +34,7 @@ struct TrajectorySlot {
 
 ros::Publisher command_pub, status_pub;
 nav_msgs::Odometry odom;
+bool odom_twist_in_body{false};
 uav_mission_msgs::TaskContext authorization;
 TrajectorySlot active, pending;
 quadrotor_msgs::PositionCommand command;
@@ -281,7 +282,21 @@ void replanCallback(const std_msgs::EmptyConstPtr&) {
   ROS_DEBUG_THROTTLE(1.0, "Replan requested; retaining active trajectory until safe handover");
 }
 
-void odomCallback(const nav_msgs::OdometryConstPtr& msg) { odom = *msg; }
+void odomCallback(const nav_msgs::OdometryConstPtr& msg) {
+  odom = *msg;
+  if (!odom_twist_in_body) return;
+  const auto& q = msg->pose.pose.orientation;
+  Eigen::Quaterniond rotation(q.w, q.x, q.y, q.z);
+  const auto& v = msg->twist.twist.linear;
+  if (!rotation.coeffs().allFinite() || rotation.norm() < 1e-6) {
+    odom.header.stamp = ros::Time();
+    return;
+  }
+  const Eigen::Vector3d world_velocity = rotation.normalized() * Eigen::Vector3d(v.x, v.y, v.z);
+  odom.twist.twist.linear.x = world_velocity.x();
+  odom.twist.twist.linear.y = world_velocity.y();
+  odom.twist.twist.linear.z = world_velocity.z();
+}
 
 void fillCommand(const uav_mission_msgs::TaskContext& context, uint64_t id,
                  const Eigen::Vector3d& position, const Eigen::Vector3d& velocity,
@@ -357,6 +372,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle node;
   ros::NodeHandle nh("~");
 
+  nh.param("odom_twist_in_body", odom_twist_in_body, false);
   nh.param<std::string>("world_frame", world_frame, "world");
   nh.param<std::string>("source_id", source_id, "fuel_planner");
   nh.param("trajectory_handover/position_tolerance", position_switch_tolerance, 0.75);

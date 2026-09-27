@@ -49,12 +49,13 @@ private:
   EXPL_STATE state_;
 
   bool classic_;
+  bool odom_twist_in_body_{false};
   bool return_home_{false}, active_trajectory_unsafe_{false};
   int no_frontier_cycles_{0}, plan_failures_{0};
   int finish_confirm_cycles_{3}, explore_max_failures_{3};
   double retry_interval_{1.0}, return_retry_interval_{1.0};
   double return_replan_period_{1.0}, home_tolerance_{0.20}, home_speed_tolerance_{0.15};
-  ros::Time next_plan_attempt_, last_execution_status_, submitted_at_;
+  ros::Time next_plan_attempt_, last_execution_status_, submitted_at_, terminal_error_since_;
   double handover_timeout_{2.0};
   shared_ptr<LocalTrajData> executing_traj_, submitted_traj_;
   int next_trajectory_id_{0};

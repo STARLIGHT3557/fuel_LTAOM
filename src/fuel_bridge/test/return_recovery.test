@@ -12,6 +12,7 @@
   </group>
   <node pkg="plan_manage" type="traj_server" name="recovery_traj_server" required="true">
     <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+    <param name="odom_twist_in_body" value="true"/>
     <remap from="/position_cmd" to="/fuel/position_cmd"/>
     <remap from="/odom_world" to="/fuel/odom"/>
   </node>

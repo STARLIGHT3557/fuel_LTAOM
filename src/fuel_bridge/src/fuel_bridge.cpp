@@ -208,7 +208,8 @@ class FuelBridge {
       cmd.trajectory_id = trajectory_id_;
       cmd.position = hold ? *hold : odom_.pose.pose.position;
       const auto &q = odom_.pose.pose.orientation;
-      cmd.yaw = std::atan2(2.0 * (q.w*q.z + q.x*q.y),
+      // Home holds local ENU yaw zero; other stops retain measured heading.
+      cmd.yaw = hold ? 0.0 : std::atan2(2.0 * (q.w*q.z + q.x*q.y),
                            1.0 - 2.0 * (q.y*q.y + q.z*q.z));
       cmd.finished = true;
       command_pub_.publish(cmd);

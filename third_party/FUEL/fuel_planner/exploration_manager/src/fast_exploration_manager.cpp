@@ -227,7 +227,7 @@ int FastExplorationManager::planExploreMotion(
 
 int FastExplorationManager::planToGoal(const Vector3d& pos, const Vector3d& vel,
     const Vector3d& acc, const Vector3d& yaw, const Vector3d& goal, double goal_yaw,
-    double segment_length, bool recovery) {
+    double segment_length, bool recovery, bool return_task) {
   if (!pos.allFinite() || !vel.allFinite() || !acc.allFinite() || !yaw.allFinite() ||
       !goal.allFinite() || !std::isfinite(goal_yaw)) {
     ROS_ERROR("Non-finite state or goal passed to planToGoal");
@@ -238,11 +238,106 @@ int FastExplorationManager::planToGoal(const Vector3d& pos, const Vector3d& vel,
     ROS_ERROR_STREAM("Goal is outside bounds, occupied, inflated, or unknown: " << goal.transpose());
     return FAIL;
   }
-  // No new trajectory was produced here; never report success with stale data.
-  if ((pos - goal).norm() < 0.05) return FAIL;
+  auto& terminal = planner_manager_->local_data_;
+  terminal.terminal_return_ = false;
+  const double max_v = planner_manager_->pp_.max_vel_;
+  const double max_a = planner_manager_->pp_.max_acc_;
+  const double distance = (pos - goal).norm();
+  const double approach_radius = std::max(3.5, vel.squaredNorm() / (2.0 * max_a) + 1.0);
+  if (return_task && distance <= approach_radius) {
+    // Six uniform cubic control points enforce p/v/a at both boundaries
+    // exactly. Lengthen by rebuilding, preserving the incoming derivatives.
+    double duration = std::max(2.0, std::max(3.0 * distance / max_v,
+                                            3.0 * vel.norm() / max_a));
+    const double final_yaw = yaw[0] + std::atan2(std::sin(goal_yaw - yaw[0]),
+                                                std::cos(goal_yaw - yaw[0]));
+    for (int attempt = 0; attempt < 12; ++attempt, duration *= 1.25) {
+      const double dt = duration / 3.0;
+      Eigen::MatrixXd points(6, 3), headings(6, 1);
+      points.row(0) = pos - dt * vel + dt * dt * acc / 3.0;
+      points.row(1) = pos - dt * dt * acc / 6.0;
+      points.row(2) = pos + dt * vel + dt * dt * acc / 3.0;
+      for (int i = 3; i < 6; ++i) points.row(i) = goal;
+      NonUniformBspline position(points, 3, dt);
+      auto velocity = position.getDerivative();
+      auto acceleration = velocity.getDerivative();
+      auto bounded = [](NonUniformBspline& spline, double limit) {
+        return spline.getControlPoint().rowwise().norm().maxCoeff() <= limit + 1e-6;
+      };
+      if (!bounded(velocity, std::max(max_v, vel.norm())) ||
+          !bounded(acceleration, std::max(max_a, acc.norm()))) continue;
+      // Turning may take longer than translation. Append stationary position
+      // spans instead of stretching the braking path and creating an overshoot.
+      NonUniformBspline heading, yaw_rate, yaw_acceleration;
+      double total_duration = duration;
+      bool heading_ok = false;
+      for (int turn = 0; turn < 12; ++turn) {
+        const double yaw_dt = total_duration / 3.0;
+        headings(0, 0) = yaw[0] - yaw_dt * yaw[1] + yaw_dt * yaw_dt * yaw[2] / 3.0;
+        headings(1, 0) = yaw[0] - yaw_dt * yaw_dt * yaw[2] / 6.0;
+        headings(2, 0) = yaw[0] + yaw_dt * yaw[1] + yaw_dt * yaw_dt * yaw[2] / 3.0;
+        for (int i = 3; i < 6; ++i) headings(i, 0) = final_yaw;
+        heading = NonUniformBspline(headings, 3, yaw_dt);
+        yaw_rate = heading.getDerivative();
+        yaw_acceleration = yaw_rate.getDerivative();
+        // Quadratic yaw-rate control points overbound the curve at the
+        // boundary. Check its exact extrema (acceleration is piecewise linear)
+        // so a turning vehicle can enter the terminal without an artificial stop.
+        double peak_rate = 0.0;
+        for (int span = 0; span < 3; ++span) {
+          const double a = span * yaw_dt, b = (span + 1) * yaw_dt;
+          const double aa = yaw_acceleration.evaluateDeBoorT(a)[0];
+          const double ab = yaw_acceleration.evaluateDeBoorT(b)[0];
+          peak_rate = std::max(peak_rate, std::abs(yaw_rate.evaluateDeBoorT(a)[0]));
+          peak_rate = std::max(peak_rate, std::abs(yaw_rate.evaluateDeBoorT(b)[0]));
+          if (aa * ab < 0.0) {
+            const double root = a + yaw_dt * aa / (aa - ab);
+            peak_rate = std::max(peak_rate, std::abs(yaw_rate.evaluateDeBoorT(root)[0]));
+          }
+        }
+        if (peak_rate <= std::max(0.6, std::abs(yaw[1])) + 1e-6 &&
+            bounded(yaw_acceleration, std::max(0.8, std::abs(yaw[2])))) {
+          heading_ok = true;
+          break;
+        }
+        total_duration = std::ceil(total_duration * 1.25 / dt) * dt;
+      }
+      if (!heading_ok) continue;
+      const int spans = std::max(3, int(std::lround(total_duration / dt)));
+      points.conservativeResize(spans + 3, 3);
+      for (int i = 6; i < points.rows(); ++i) points.row(i) = goal;
+      position = NonUniformBspline(points, 3, dt);
+      velocity = position.getDerivative();
+      acceleration = velocity.getDerivative();
+      bool safe = true;
+      const int samples = std::max(1, int(std::ceil(total_duration / 0.02)));
+      for (int i = 0; i <= samples; ++i) {
+        const Vector3d sample = position.evaluateDeBoorT(total_duration * i / samples);
+        if (!sdf_map_->isInBox(sample) || sdf_map_->getOccupancy(sample) != SDFMap::FREE ||
+            sdf_map_->getInflateOccupancy(sample) != 0) { safe = false; break; }
+      }
+      if (!safe) continue;  // Still try another duration, then normal path search.
+      terminal.position_traj_ = position;
+      terminal.velocity_traj_ = velocity;
+      terminal.acceleration_traj_ = acceleration;
+      terminal.yaw_traj_ = heading;
+      terminal.yawdot_traj_ = yaw_rate;
+      terminal.yawdotdot_traj_ = yaw_acceleration;
+      terminal.duration_ = total_duration;
+      terminal.start_pos_ = pos;
+      terminal.terminal_return_ = true;
+      ed_->next_goal_ = goal;
+      ed_->path_next_goal_ = {pos, goal};
+      ROS_INFO("Terminal return: %.2f m, %.2f s; exact zero-speed endpoint", distance, total_duration);
+      return SUCCEED;
+    }
+  }
+  // An unsafe terminal candidate must not bypass collision-aware path search.
+  if (distance < 0.05) return FAIL;
 
-  const double diff = std::fabs(goal_yaw - yaw[0]);
-  const double time_lb = std::min(diff, 2 * M_PI - diff) / ViewNode::yd_;
+  const double diff = std::abs(std::atan2(std::sin(goal_yaw - yaw[0]),
+                                          std::cos(goal_yaw - yaw[0])));
+  const double time_lb = std::max(return_task ? 1.0 : 0.0, diff / ViewNode::yd_);
   planner_manager_->path_finder_->reset();
   if (planner_manager_->path_finder_->search(pos, goal) != Astar::REACH_END) {
     ROS_ERROR_STREAM("No collision-free known-space path to goal " << goal.transpose());
@@ -282,6 +377,21 @@ int FastExplorationManager::planToGoal(const Vector3d& pos, const Vector3d& vel,
 
   auto& local = planner_manager_->local_data_;
   auto& trajectory = local.position_traj_;
+  if (return_task && (ed_->next_goal_ - goal).norm() < 1e-6) {
+    // The optimizer's endpoint costs are soft. Enforce a true stopped home
+    // boundary before rechecking dynamics and collision, even on the fallback
+    // path, so traj_server never has to abruptly zero a moving endpoint.
+    Eigen::MatrixXd points = trajectory.getControlPoint();
+    if (points.rows() < 6) return FAIL;
+    for (int i = points.rows() - 3; i < points.rows(); ++i) points.row(i) = goal;
+    const auto knots = trajectory.getKnot();
+    trajectory.setUniformBspline(points, 3, trajectory.getKnotSpan());
+    trajectory.setKnot(knots);
+    local.velocity_traj_ = trajectory.getDerivative();
+    local.acceleration_traj_ = local.velocity_traj_.getDerivative();
+    local.start_pos_ = trajectory.evaluateDeBoorT(0.0);
+    local.duration_ = trajectory.getTimeSum();
+  }
   trajectory.setPhysicalLimits(planner_manager_->pp_.max_vel_, planner_manager_->pp_.max_acc_);
   const double original_duration = trajectory.getTimeSum();
   bool feasible = trajectory.checkFeasibility(false);
@@ -306,8 +416,13 @@ int FastExplorationManager::planToGoal(const Vector3d& pos, const Vector3d& vel,
              reallocations, original_duration, local.duration_);
   }
   const double duration = trajectory.getTimeSum();
-  for (double t = 0.0; t <= duration + 1e-6; t += 0.05) {
-    const Vector3d sample = trajectory.evaluateDeBoorT(std::min(t, duration));
+  if (return_task && duration < 1.0) {
+    ROS_WARN("Reject compressed return segment %.3f s; keep retrying", duration);
+    return FAIL;
+  }
+  const int collision_samples = std::max(1, int(std::ceil(duration / 0.02)));
+  for (int i = 0; i <= collision_samples; ++i) {
+    const Vector3d sample = trajectory.evaluateDeBoorT(duration * i / collision_samples);
     if (!sdf_map_->isInBox(sample) || sdf_map_->getOccupancy(sample) == SDFMap::UNKNOWN ||
         sdf_map_->getInflateOccupancy(sample) != 0) {
       ROS_ERROR_STREAM("Optimized trajectory leaves known collision-free bounds at "

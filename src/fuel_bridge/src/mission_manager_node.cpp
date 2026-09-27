@@ -125,6 +125,8 @@ class MissionManager {
     replan_requested_ = false;
     last_replan_request_ = ros::Time();
     last_return_execution_ = ros::Time();
+    reference_settled_ = false;
+    settled_stamp_ = ros::Time();
     last_accepted_trajectory_ = 0;
     stable_since_ = ros::Time();
     publishAuthorization();
@@ -279,6 +281,15 @@ class MissionManager {
   void plannerCallback(const uav_mission_msgs::PlannerStatusConstPtr& msg) {
     if (!sameContext(msg->context, context_)) return;
     planner_stamp_ = ros::Time::now();
+    if (returning()) {
+      reference_settled_ = msg->state == uav_mission_msgs::PlannerStatus::GOAL_REACHED &&
+                           msg->trajectory_id == last_accepted_trajectory_;
+      if (reference_settled_) settled_stamp_ = planner_stamp_;
+      if (msg->trajectory_id == last_accepted_trajectory_ &&
+          (reference_settled_ || msg->state == uav_mission_msgs::PlannerStatus::SETTLING)) {
+        last_return_execution_ = planner_stamp_;
+      }
+    }
     if (msg->state == uav_mission_msgs::PlannerStatus::TRAJECTORY_READY) {
       explore_trajectory_ready_ = true;
     }
@@ -338,8 +349,17 @@ class MissionManager {
     }
   }
 
+  bool reference_settled_{false};
+  ros::Time settled_stamp_;
   bool atHome() const {
-    if (!fresh(odom_.header.stamp, data_timeout_)) return false;
+    if (!reference_settled_ || !fresh(settled_stamp_, 1.0) ||
+        !fresh(odom_.header.stamp, data_timeout_)) return false;
+    const auto& q = odom_.pose.pose.orientation;
+    const double yaw = std::atan2(2.0 * (q.w*q.z + q.x*q.y),
+                                  1.0 - 2.0 * (q.y*q.y + q.z*q.z));
+    const double yaw_rate = odom_.twist.twist.angular.z;
+    if (!std::isfinite(yaw) || !std::isfinite(yaw_rate) ||
+        std::abs(yaw) > 0.08 || std::abs(yaw_rate) > 0.10) return false;
     const auto& p = odom_.pose.pose.position;
     const auto& v = odom_.twist.twist.linear;
     if (!finitePoint(p) || !std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z))

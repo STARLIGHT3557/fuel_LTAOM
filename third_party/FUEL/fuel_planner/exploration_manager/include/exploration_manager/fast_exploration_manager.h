@@ -34,7 +34,7 @@ public:
   // intentionally produce a safe intermediate segment and keep the same task.
   int planToGoal(const Vector3d& pos, const Vector3d& vel, const Vector3d& acc,
                  const Vector3d& yaw, const Vector3d& goal, double goal_yaw,
-                 double segment_length = 5.0, bool recovery = false);
+                 double segment_length = 5.0, bool recovery = false, bool return_task = false);
 
   // Benchmark method, classic frontier and rapid frontier
   int classicFrontier(const Vector3d& pos, const double& yaw);

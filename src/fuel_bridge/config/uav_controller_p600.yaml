@@ -6,13 +6,13 @@ fsm:
   position_step: false
 
 k_pos:
-  x: 8.0
-  y: 8.0
+  x: 9.0
+  y: 9.0
   z: 12.0
 k_vel:
-  x: 4.0
-  y: 4.0
-  z: 5.0
+  x: 6.0
+  y: 6.0
+  z: 8.0
 
 hover_percentage: 0.258
 estimate_thrust: true

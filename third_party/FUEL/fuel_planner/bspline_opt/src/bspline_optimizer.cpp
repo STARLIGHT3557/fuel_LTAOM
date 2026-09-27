@@ -138,6 +138,9 @@ void BsplineOptimizer::optimize(Eigen::MatrixXd& points, double& dt, const int& 
     pt_dist_ += (control_points_.row(i + 1) - control_points_.row(i)).norm();
   }
   pt_dist_ /= double(point_num_);
+  // Constant yaw (or coincident points) has zero spacing, but a finite
+  // smoothness cost. Avoid 0/0 and preserve the initial candidate on failure.
+  pt_dist_ = std::max(pt_dist_, 1e-6);
 
   iter_num_ = 0;
   min_cost_ = std::numeric_limits<double>::max();
@@ -202,6 +205,7 @@ void BsplineOptimizer::optimize() {
     }
   // Variables for knot span
   if (optimize_time_) q[variable_num_ - 1] = knot_span_;
+  best_variable_ = q;
 
   if (dim_ != 1) {
     vector<double> lb(variable_num_), ub(variable_num_);

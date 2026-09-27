@@ -251,6 +251,21 @@ def run_scene(args):
                       (rospy.Time.now() - odom.header.stamp).to_sec()), flush=True)
             raise
         print('Return trajectory reached stable HOME_HOLD', flush=True)
+        wait(lambda: commands and commands[-1][1].finished and
+             context_key(commands[-1][1].context) == return_context,
+             2, 'Home hold setpoint received')
+        previous, held_command = commands[-2][1], commands[-1][1]
+        assert context_key(previous.context) == return_context
+        for field in ('position', 'velocity', 'acceleration'):
+            before, after = getattr(previous, field), getattr(held_command, field)
+            assert math.dist([before.x, before.y, before.z], [after.x, after.y, after.z]) < 1e-3, \
+                'Home hold introduced a {} reference jump'.format(field)
+        yaw_jump = math.atan2(math.sin(held_command.yaw - previous.yaw),
+                              math.cos(held_command.yaw - previous.yaw))
+        assert abs(yaw_jump) < 1e-3, 'Home hold introduced a yaw reference jump'
+        q = latest['odom'].pose.pose.orientation
+        actual_yaw = math.atan2(2*(q.w*q.z + q.x*q.y), 1-2*(q.y*q.y + q.z*q.z))
+        assert abs(actual_yaw) <= 0.10, 'Home hold entered before yaw converged'
         odom = latest['odom']
         final_position = [odom.pose.pose.position.x, odom.pose.pose.position.y,
                           odom.pose.pose.position.z]
