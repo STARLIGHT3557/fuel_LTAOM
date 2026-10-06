@@ -1,0 +1,20 @@
+# uav_controller 轨迹运行时的 RViz 可视化参数。
+
+frame_id: map
+
+setpoint_topic: /uav_controller/active_setpoint
+
+desired_path_topic: /uav_controller/rviz/desired_path
+actual_path_topic: /uav_controller/rviz/actual_path
+marker_topic: /uav_controller/rviz/markers
+
+publish_rate_hz: 10.0
+max_path_points: 3000
+min_path_step: 0.02
+
+line_width: 0.035
+text_scale: 0.25
+text_offset_z: 0.45
+
+show_velocity_arrow: true
+velocity_arrow_scale: 0.35

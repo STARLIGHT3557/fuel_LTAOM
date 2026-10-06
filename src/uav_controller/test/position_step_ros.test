@@ -1,0 +1,16 @@
+<launch>
+  <!-- Exercise the actual launch file against a fake FCU, without flight hardware. -->
+  <group>
+    <remap from="/mavros/local_position/pose" to="/step_test_fcu/pose" />
+    <remap from="/mavros/local_position/velocity_local" to="/step_test_fcu/velocity" />
+    <remap from="/mavros/state" to="/step_test_fcu/state" />
+    <remap from="/mavros/extended_state" to="/step_test_fcu/extended_state" />
+    <remap from="/mavros/imu/data" to="/step_test_fcu/imu" />
+    <remap from="/mavros/setpoint_raw/attitude" to="/step_test_fcu/attitude" />
+    <include file="$(find uav_controller)/launch/fixed_point_test.launch">
+      <arg name="use_rviz" value="false" />
+    </include>
+  </group>
+  <test test-name="position_step_ros" pkg="uav_controller"
+        type="position_step_ros_test.py" time-limit="20.0" />
+</launch>
