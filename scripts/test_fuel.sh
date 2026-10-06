@@ -13,6 +13,9 @@ rostest uav_controller position_step_ros.test
 rostest prometheus_fuel frontier_boundary.test
 rostest prometheus_fuel bridge.test
 rostest prometheus_fuel planner.test
+rostest prometheus_fuel planner_overrun.test
+rostest prometheus_fuel exploration_handover.test
+rostest prometheus_fuel exploration_timeouts.test
 rostest prometheus_fuel return_recovery.test
 rostest prometheus_fuel return_planner.test
 echo "Test results: $ROS_HOME/test_results"

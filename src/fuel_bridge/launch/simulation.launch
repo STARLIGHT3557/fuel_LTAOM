@@ -1,9 +1,9 @@
 <launch>
   <arg name="uav_id" default="1"/>
-  <arg name="odom_topic" default="/uav$(arg uav_id)/mavros/local_position/odom"/>
+  <arg name="odom_topic" default="/mavros/local_position/odom"/>
   <arg name="cloud_topic" default="/livox/lidar_mapping"/>
-  <arg name="battery_topic" default="/uav$(arg uav_id)/mavros/battery"/>
-  <arg name="lidar_frame" default="uav$(arg uav_id)/lidar_link"/>
+  <arg name="battery_topic" default="/mavros/battery"/>
+  <arg name="lidar_frame" default="lidar_link"/>
   <!-- A dictionary lookup rejects unsupported scene names. -->
   <arg name="scene" default="cylinder"/>
   <arg name="world_file" value="$(eval find('prometheus_gazebo') + '/gazebo_worlds/planning_worlds/' + {'cylinder': 'planning_easy2.world', 'indoor4': 'indoor4.world'}[arg('scene')])"/>
@@ -13,15 +13,15 @@
   <arg name="spawn_x" default="$(eval {'cylinder': -10.0, 'indoor4': 0.0}[arg('scene')])"/>
   <arg name="spawn_y" default="$(eval {'cylinder': 0.0, 'indoor4': -1.0}[arg('scene')])"/>
   <!-- Convert Gazebo field bounds to PX4/Prometheus local ENU coordinates. -->
-  <arg name="box_min_x" default="$(eval {'cylinder': -11.0, 'indoor4': -15.0}[arg('scene')] - float(arg('spawn_x')))"/>
-  <arg name="box_min_y" default="$(eval {'cylinder': -11.0, 'indoor4': -15.0}[arg('scene')] - float(arg('spawn_y')))"/>
+  <arg name="box_min_x" default="$(eval {'cylinder': -11.0, 'indoor4': -25.0}[arg('scene')] - float(arg('spawn_x')))"/>
+  <arg name="box_min_y" default="$(eval {'cylinder': -11.0, 'indoor4': -25.0}[arg('scene')] - float(arg('spawn_y')))"/>
   <arg name="box_min_z" default="0.5"/>
   <arg name="box_max_x" default="$(eval {'cylinder': 12.0, 'indoor4': 24.0}[arg('scene')] - float(arg('spawn_x')))"/>
-  <arg name="box_max_y" default="$(eval {'cylinder': 10.0, 'indoor4': 13.0}[arg('scene')] - float(arg('spawn_y')))"/>
+  <arg name="box_max_y" default="$(eval {'cylinder': 10.0, 'indoor4': 23.0}[arg('scene')] - float(arg('spawn_y')))"/>
   <!-- Keep indoor flight goals below the 2.5 m maze walls. -->
   <arg name="box_max_z" default="$(eval {'cylinder': 2.5, 'indoor4': 2.0}[arg('scene')])"/>
-  <arg name="max_vel" default="2.0"/>
-  <arg name="max_acc" default="2.0"/>
+  <arg name="max_vel" default="1.5"/>
+  <arg name="max_acc" default="1.0"/>
   <arg name="gui" default="true"/>
   <arg name="rviz" default="true"/>
   <include file="$(find prometheus_gazebo)/launch/p600_mid360.launch">
@@ -31,17 +31,9 @@
     <arg name="gui" value="$(arg gui)"/>
     <arg name="world_file" value="$(arg world_file)"/>
   </include>
-  <group>
-    <remap from="/mavros/local_position/pose" to="/uav$(arg uav_id)/mavros/local_position/pose"/>
-    <remap from="/mavros/local_position/velocity_local" to="/uav$(arg uav_id)/mavros/local_position/velocity_local"/>
-    <remap from="/mavros/imu/data" to="/uav$(arg uav_id)/mavros/imu/data"/>
-    <remap from="/mavros/state" to="/uav$(arg uav_id)/mavros/state"/>
-    <remap from="/mavros/extended_state" to="/uav$(arg uav_id)/mavros/extended_state"/>
-    <remap from="/mavros/setpoint_raw/attitude" to="/uav$(arg uav_id)/mavros/setpoint_raw/attitude"/>
-    <include file="$(find uav_controller)/launch/geometric_controller.launch">
-      <arg name="params_file" value="$(find prometheus_fuel)/config/uav_controller_p600.yaml"/>
-    </include>
-  </group>
+  <include file="$(find uav_controller)/launch/geometric_controller.launch">
+    <arg name="params_file" value="$(find prometheus_fuel)/config/uav_controller_p600.yaml"/>
+  </include>
   <include file="$(find prometheus_fuel)/launch/fuel.launch">
     <arg name="uav_id" value="$(arg uav_id)"/>
     <arg name="odom_topic" value="$(arg odom_topic)"/>

@@ -425,7 +425,7 @@
             <ros_topic>livox/lidar</ros_topic>
             <!-- Includes max-range no-hit endpoints for free-space raycasting. -->
             <mapping_topic>livox/lidar_mapping</mapping_topic>
-            <frameName>uav{{ mavlink_id }}/lidar_link</frameName>
+            <frameName>lidar_link</frameName>
           </plugin>
         </sensor>
   </link>
@@ -606,8 +606,7 @@
       <alwaysOn>true</alwaysOn>
       <updateRate>50.0</updateRate>
       <bodyName>base_link</bodyName>
-      <!-- 默认是1号机 -->
-      <topicName>/uav{{ mavlink_id }}/prometheus/ground_truth</topicName>
+      <topicName>/prometheus/ground_truth</topicName>
       <gaussianNoise>0.00</gaussianNoise>
       <frameName>world</frameName>
       <xyzOffsets>0 0 0</xyzOffsets>

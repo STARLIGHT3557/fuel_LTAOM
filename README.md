@@ -63,7 +63,7 @@ bash fuel_simulation.sh scene:=indoor4
 
 ```bash
 source source.sh
-rostopic echo -n 1 /uav1/mavros/state
+rostopic echo -n 1 /mavros/state
 rostopic echo -n 1 /uav_controller/fsm_status
 ```
 
@@ -80,7 +80,7 @@ rosservice call /fuel/stop "{}"
 **降落：**先停止探索，再执行：
 
 ```bash
-rosservice call /uav1/mavros/set_mode "{base_mode: 0, custom_mode: 'AUTO.LAND'}"
+rosservice call /mavros/set_mode "{base_mode: 0, custom_mode: 'AUTO.LAND'}"
 ```
 
 探索完成后停在最后的轨迹停止点，不自动返航或降落。

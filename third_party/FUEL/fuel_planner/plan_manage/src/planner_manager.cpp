@@ -10,6 +10,58 @@
 #include <visualization_msgs/Marker.h>
 
 namespace fast_planner {
+namespace {
+
+bool derivativeControlBound(NonUniformBspline& spline, double limit) {
+  const Eigen::MatrixXd points = spline.getControlPoint();
+  return points.size() > 0 && points.cwiseAbs().maxCoeff() <= limit + 1e-6;
+}
+
+// A cubic position spline has a quadratic velocity and a piecewise-linear
+// acceleration. If the derivative control polygons cannot certify the limit,
+// check every span endpoint plus each velocity extremum (a(t) == 0). This is
+// an exact per-axis check for the uniform cubic splines built below.
+bool actualDerivativeExtremaWithin(NonUniformBspline& position, double max_vel, double max_acc) {
+  NonUniformBspline velocity = position.getDerivative();
+  NonUniformBspline acceleration = velocity.getDerivative();
+  if (derivativeControlBound(velocity, max_vel) &&
+      derivativeControlBound(acceleration, max_acc)) return true;
+
+  const double duration = position.getTimeSum();
+  const double dt = position.getKnotSpan();
+  const int spans = std::max(1, int(std::lround(duration / dt)));
+  for (int span = 0; span < spans; ++span) {
+    const double begin = span * dt;
+    const double end = std::min(duration, (span + 1) * dt);
+    const Eigen::Vector3d v0 = velocity.evaluateDeBoorT(begin);
+    const Eigen::Vector3d v1 = velocity.evaluateDeBoorT(end);
+    const Eigen::Vector3d a0 = acceleration.evaluateDeBoorT(begin);
+    const Eigen::Vector3d a1 = acceleration.evaluateDeBoorT(end);
+    for (int axis = 0; axis < 3; ++axis) {
+      if (std::max(std::abs(v0[axis]), std::abs(v1[axis])) > max_vel + 1e-6 ||
+          std::max(std::abs(a0[axis]), std::abs(a1[axis])) > max_acc + 1e-6) return false;
+      if (a0[axis] * a1[axis] < 0.0) {
+        const double root = begin + (end - begin) * a0[axis] / (a0[axis] - a1[axis]);
+        if (std::abs(velocity.evaluateDeBoorT(root)[axis]) > max_vel + 1e-6) return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool knownCollisionFree(NonUniformBspline& position, const shared_ptr<SDFMap>& map) {
+  const double duration = position.getTimeSum();
+  const int samples = std::max(1, int(std::ceil(duration / 0.02)));
+  for (int i = 0; i <= samples; ++i) {
+    const Eigen::Vector3d point = position.evaluateDeBoorT(duration * i / samples);
+    if (!point.allFinite() || !map->isInBox(point) ||
+        map->getOccupancy(point) != SDFMap::FREE || map->getInflateOccupancy(point) != 0)
+      return false;
+  }
+  return true;
+}
+
+}  // namespace
 // SECTION interfaces for setup and query
 
 FastPlannerManager::FastPlannerManager() {
@@ -313,6 +365,176 @@ void FastPlannerManager::planExploreTraj(const vector<Eigen::Vector3d>& tour,
   local_data_.position_traj_.setUniformBspline(ctrl_pts, pp_.bspline_degree_, dt);
 
   updateTrajInfo();
+}
+
+bool FastPlannerManager::planReturnTraj(const vector<Eigen::Vector3d>& input_tour,
+    const Eigen::Vector3d& cur_vel, const Eigen::Vector3d& cur_acc, bool terminal) {
+  vector<Eigen::Vector3d> tour;
+  for (const auto& point : input_tour) {
+    if (!point.allFinite()) return false;
+    if (tour.empty() || (point - tour.back()).norm() > 1e-4) tour.push_back(point);
+  }
+  if (tour.size() < 2 && terminal && input_tour.size() >= 2)
+    tour = {input_tour.front(), input_tour.back()};
+  if (tour.size() < 2 || !cur_vel.allFinite() || !cur_acc.allFinite()) return false;
+  if (tour.size() == 2)
+    tour.insert(tour.begin() + 1, 0.5 * (tour.front() + tour.back()));
+
+  double path_length = 0.0;
+  for (size_t i = 1; i < tour.size(); ++i) path_length += (tour[i] - tour[i - 1]).norm();
+  const Eigen::Vector3d zero = Eigen::Vector3d::Zero();
+  const int waypoint_count = static_cast<int>(tour.size());
+  Eigen::MatrixXd positions(waypoint_count, 3);
+  for (int i = 0; i < waypoint_count; ++i) positions.row(i) = tour[i];
+
+  Eigen::VectorXd base_times(waypoint_count - 1);
+  for (int i = 0; i < waypoint_count - 1; ++i) {
+    const double distance = (tour[i + 1] - tour[i]).norm();
+    base_times[i] = std::max(0.20, distance / (pp_.max_vel_ * 0.5));
+  }
+  const double base_duration = base_times.sum();
+  const double minimum_duration = terminal
+      ? std::max(2.0, std::max(3.0 * path_length / pp_.max_vel_,
+                              3.0 * cur_vel.norm() / pp_.max_acc_))
+      : std::max(1.0, 2.0 * path_length / pp_.max_vel_);
+  const double initial_scale = std::max(1.0, minimum_duration / base_duration);
+
+  for (int attempt = 0; attempt < 10 && ros::ok(); ++attempt) {
+    const double time_scale = initial_scale * std::pow(1.25, attempt);
+    const Eigen::VectorXd times = base_times * time_scale;
+    PolynomialTraj initial;
+    PolynomialTraj::waypointsTraj(
+        positions, cur_vel, zero, cur_acc, zero, times, initial);
+    const double duration = initial.getTotalTime();
+    const int segment_count = std::max(
+        8, int(std::ceil(std::max(path_length, initial.getLength()) / pp_.ctrl_pt_dist)));
+    double dt = duration / segment_count;
+
+    vector<Eigen::Vector3d> samples;
+    samples.reserve(segment_count + 1);
+    for (int i = 0; i <= segment_count; ++i)
+      samples.push_back(initial.evaluate(std::min(duration, i * dt), 0));
+    vector<Eigen::Vector3d> derivatives = {
+      initial.evaluate(0.0, 1), initial.evaluate(duration, 1),
+      initial.evaluate(0.0, 2), initial.evaluate(duration, 2)
+    };
+    Eigen::MatrixXd control_points;
+    NonUniformBspline::parameterizeToBspline(
+        dt, samples, derivatives, pp_.bspline_degree_, control_points);
+    if (control_points.rows() < 7 || !control_points.allFinite()) continue;
+
+    // For a uniform cubic B-spline, these three controls represent the
+    // requested position, velocity and acceleration at t = 0 exactly.  The
+    // waypoint parameterization is a least-squares solve, so deriving the
+    // boundary controls explicitly avoids carrying its residual into the
+    // hard constraints below.  When terminal, three identical tail controls
+    // likewise impose p(T) = home, v(T) = 0 and a(T) = 0.
+    const double dt2 = dt * dt;
+    control_points.row(0) = tour.front() - dt * cur_vel + dt2 * cur_acc / 3.0;
+    control_points.row(1) = tour.front() - dt2 * cur_acc / 6.0;
+    control_points.row(2) = tour.front() + dt * cur_vel + dt2 * cur_acc / 3.0;
+    if (terminal) {
+      control_points.row(control_points.rows() - 3) = tour.back();
+      control_points.row(control_points.rows() - 2) = tour.back();
+      control_points.row(control_points.rows() - 1) = tour.back();
+    }
+
+    NonUniformBspline initial_spline(control_points, pp_.bspline_degree_, dt);
+    vector<Eigen::Vector3d> start_state, end_state;
+    initial_spline.getBoundaryStates(2, 2, start_state, end_state);
+    bspline_optimizers_[0]->setBoundaryStates(start_state, end_state);
+    bspline_optimizers_[0]->setFixedControlPoints(3, terminal ? 3 : 0);
+    // Return timing is selected by this outer loop. Do not enable MINTIME:
+    // changing dt inside NLopt would invalidate the fixed derivative controls.
+    bspline_optimizers_[0]->optimize(
+        control_points, dt, BsplineOptimizer::NORMAL_PHASE, 1, 1);
+
+    NonUniformBspline candidate(control_points, pp_.bspline_degree_, dt);
+    vector<Eigen::Vector3d> actual_start, actual_end;
+    candidate.getBoundaryStates(2, 2, actual_start, actual_end);
+    const bool start_exact = (actual_start[0] - tour.front()).norm() <= 1e-5 &&
+        (actual_start[1] - cur_vel).norm() <= 1e-5 &&
+        (actual_start[2] - cur_acc).norm() <= 1e-5;
+    const bool end_exact = !terminal ||
+        ((actual_end[0] - tour.back()).norm() <= 1e-5 &&
+         actual_end[1].norm() <= 1e-5 && actual_end[2].norm() <= 1e-5);
+    if (!start_exact || !end_exact) {
+      ROS_ERROR("Return optimizer changed a fixed boundary state");
+      continue;
+    }
+    if (!actualDerivativeExtremaWithin(candidate, pp_.max_vel_, pp_.max_acc_) ||
+        !knownCollisionFree(candidate, sdf_map_)) continue;
+
+    local_data_.position_traj_ = candidate;
+    local_data_.terminal_return_ = false;
+    updateTrajInfo();
+    ROS_INFO("Return B-spline: %s, %.2f m, %.2f s, dt %.3f, attempt %d",
+             terminal ? "terminal" : "rolling", path_length, duration, dt, attempt + 1);
+    return true;
+  }
+  return false;
+}
+
+bool FastPlannerManager::planReturnYaw(const Eigen::Vector3d& start_yaw, double end_yaw) {
+  if (!start_yaw.allFinite() || !std::isfinite(end_yaw)) return false;
+  auto& position = local_data_.position_traj_;
+  const double position_dt = position.getKnotSpan();
+  const double position_duration = position.getTimeSum();
+  if (!(position_dt > 0.0) || !(position_duration > 0.0)) return false;
+
+  const double final_yaw = start_yaw[0] +
+      std::atan2(std::sin(end_yaw - start_yaw[0]), std::cos(end_yaw - start_yaw[0]));
+  double total_duration = position_duration;
+  for (int attempt = 0; attempt < 12; ++attempt) {
+    const double yaw_dt = total_duration / 3.0;
+    Eigen::MatrixXd headings(6, 1);
+    headings(0, 0) = start_yaw[0] - yaw_dt * start_yaw[1] +
+        yaw_dt * yaw_dt * start_yaw[2] / 3.0;
+    headings(1, 0) = start_yaw[0] - yaw_dt * yaw_dt * start_yaw[2] / 6.0;
+    headings(2, 0) = start_yaw[0] + yaw_dt * start_yaw[1] +
+        yaw_dt * yaw_dt * start_yaw[2] / 3.0;
+    for (int i = 3; i < 6; ++i) headings(i, 0) = final_yaw;
+    NonUniformBspline heading(headings, 3, yaw_dt);
+    NonUniformBspline yaw_rate = heading.getDerivative();
+    NonUniformBspline yaw_acceleration = yaw_rate.getDerivative();
+
+    double peak_rate = 0.0;
+    for (int span = 0; span < 3; ++span) {
+      const double begin = span * yaw_dt, finish = (span + 1) * yaw_dt;
+      const double a0 = yaw_acceleration.evaluateDeBoorT(begin)[0];
+      const double a1 = yaw_acceleration.evaluateDeBoorT(finish)[0];
+      peak_rate = std::max(peak_rate, std::abs(yaw_rate.evaluateDeBoorT(begin)[0]));
+      peak_rate = std::max(peak_rate, std::abs(yaw_rate.evaluateDeBoorT(finish)[0]));
+      if (a0 * a1 < 0.0) {
+        const double root = begin + yaw_dt * a0 / (a0 - a1);
+        peak_rate = std::max(peak_rate, std::abs(yaw_rate.evaluateDeBoorT(root)[0]));
+      }
+    }
+    const double allowed_rate = std::max(0.6, std::abs(start_yaw[1]));
+    const double allowed_acceleration = std::max(0.8, std::abs(start_yaw[2]));
+    if (peak_rate <= allowed_rate + 1e-6 &&
+        derivativeControlBound(yaw_acceleration, allowed_acceleration)) {
+      const int target_spans = std::max(1, int(std::lround(total_duration / position_dt)));
+      Eigen::MatrixXd points = position.getControlPoint();
+      const int current_spans = points.rows() - 3;
+      if (target_spans > current_spans) {
+        const Eigen::RowVector3d home = points.row(points.rows() - 1);
+        points.conservativeResize(target_spans + 3, 3);
+        for (int i = current_spans + 3; i < points.rows(); ++i) points.row(i) = home;
+        position.setUniformBspline(points, 3, position_dt);
+      }
+      local_data_.velocity_traj_ = position.getDerivative();
+      local_data_.acceleration_traj_ = local_data_.velocity_traj_.getDerivative();
+      local_data_.duration_ = position.getTimeSum();
+      local_data_.start_pos_ = position.evaluateDeBoorT(0.0);
+      local_data_.yaw_traj_ = heading;
+      local_data_.yawdot_traj_ = yaw_rate;
+      local_data_.yawdotdot_traj_ = yaw_acceleration;
+      return true;
+    }
+    total_duration = std::ceil(total_duration * 1.25 / position_dt) * position_dt;
+  }
+  return false;
 }
 
 // !SECTION

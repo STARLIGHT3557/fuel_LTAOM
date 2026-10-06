@@ -14,7 +14,7 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
-from uav_mission_msgs.msg import ControllerAck, PlannerStatus, TrajectoryStatus
+from uav_mission_msgs.msg import ControllerAck, PlannerStatus, TrajectoryStatus, TaskContext
 
 
 class PlannerTest(unittest.TestCase):
@@ -68,7 +68,7 @@ class PlannerTest(unittest.TestCase):
                 ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=handoff.context,
                                               trajectory_id=handoff.trajectory_id, accepted=True))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
-                Header(stamp=stamp, frame_id='uav1/lidar_link'), points))
+                Header(stamp=stamp, frame_id='lidar_link'), points))
 
         timer = rospy.Timer(rospy.Duration(0.1), feed)
         try:
@@ -87,15 +87,19 @@ class PlannerTest(unittest.TestCase):
             while time.monotonic() < deadline and not any(not c.finished for c in self.moves):
                 time.sleep(0.1)
             self.assertTrue(self.splines, 'FUEL produced no B-spline')
+            self.assertTrue(any(s.context.task_type == TaskContext.EXPLORE for s in self.splines),
+                            'A return trajectory must not satisfy the exploration test')
             self.assertTrue(any(not c.finished for c in self.moves), 'No controller command')
             deadline = time.monotonic() + 2
             while (time.monotonic() < deadline and
-                   not any(s.state == PlannerStatus.EXECUTING for s in self.planner_states)):
+                   not any(s.state == PlannerStatus.EXECUTING and s.context.task_type == TaskContext.EXPLORE
+                           for s in self.planner_states)):
                 time.sleep(0.05)
             self.assertTrue(any(s.state == PlannerStatus.TRAJECTORY_READY
                                 for s in self.planner_states),
                             'Planner did not report an independently observable ready state')
-            self.assertTrue(any(s.state == PlannerStatus.EXECUTING
+            self.assertTrue(any(s.state == PlannerStatus.EXECUTING and
+                                s.context.task_type == TaskContext.EXPLORE
                                 for s in self.planner_states),
                             'Planner did not publish its execution heartbeat')
             for marker in self.frontiers:

@@ -123,9 +123,9 @@ def run_scene(args):
         subscriptions = [
             rospy.Subscriber(topic, cls, lambda msg, key=key: remember(key, msg), queue_size=1)
             for key, topic, cls in [
-                ('state', '/uav1/mavros/state', State),
+                ('state', '/mavros/state', State),
                 ('control', '/uav_controller/fsm_status', FlightStatus),
-                ('odom', '/uav1/mavros/local_position/odom', Odometry),
+                ('odom', '/mavros/local_position/odom', Odometry),
                 ('mapping', '/livox/lidar_mapping', PointCloud2),
                 ('hits', '/fuel/cloud_hits_world', PointCloud2),
                 ('mission', '/fuel/mission_status', MissionStatus),
@@ -148,7 +148,7 @@ def run_scene(args):
              all(key in latest for key in ('mapping', 'hits', 'odom', 'control', 'mission')) and
              latest['control'].feedback_ready and latest['mission'].battery_valid,
              120, 'MAVROS, mapping, controller, mission manager, and 31% battery ready')
-        assert latest['mapping'].header.frame_id == 'uav1/lidar_link'
+        assert latest['mapping'].header.frame_id == 'lidar_link'
         assert latest['hits'].header.frame_id == 'world'
         ranges = [math.sqrt(x*x + y*y + z*z) for x, y, z in point_cloud2.read_points(
             latest['mapping'], field_names=('x', 'y', 'z'), skip_nans=True)]
@@ -161,8 +161,8 @@ def run_scene(args):
             assert ranges and max(ranges) <= 40.01, 'Indoor mapping range is invalid'
         assert any(0.6 < distance < 39.9 for distance in ranges), 'No real obstacle returns'
 
-        set_mode = rospy.ServiceProxy('/uav1/mavros/set_mode', SetMode)
-        arm = rospy.ServiceProxy('/uav1/mavros/cmd/arming', CommandBool)
+        set_mode = rospy.ServiceProxy('/mavros/set_mode', SetMode)
+        arm = rospy.ServiceProxy('/mavros/cmd/arming', CommandBool)
         ready_at = rospy.Time.now() + rospy.Duration(2)
         wait(lambda: rospy.Time.now() >= ready_at, 30, 'Initial setpoint stream established')
         last_request = [0.0]

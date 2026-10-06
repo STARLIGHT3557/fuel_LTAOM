@@ -27,7 +27,7 @@ FUEL 的 `quadrotor_msgs/PositionCommand` 由桥接节点直接转换为 `uav_co
 
 FUEL 启用 `fsm/direct_trajectory`：无人机在空中切入 OFFBOARD 时先锁定当前位置进入 `HOLD`；新鲜轨迹到达后进入 `TRAJECTORY`；`/fuel/stop`、规划超时或轨迹超时后锁定位置回到 `HOLD`。之后可再次触发探索。状态失效时停止输出，由 PX4 处理 offboard 链路丢失。
 
-定位改用 MAVROS 原生 `/uav1/mavros/local_position/odom`。MAVROS 局部坐标帧配置为 `world`，与点云桥接和 FUEL 一致。旧 `prometheus_uav_control` 包及 UAVCommand 控制链已删除。
+定位改用 MAVROS 原生 `/mavros/local_position/odom`。MAVROS 局部坐标帧配置为 `world`，与点云桥接和 FUEL 一致。旧 `prometheus_uav_control` 包及 UAVCommand 控制链已删除。
 
 ## 可移植性
 

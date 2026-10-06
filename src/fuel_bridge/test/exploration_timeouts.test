@@ -1,0 +1,10 @@
+<launch>
+  <group ns="fuel">
+    <node pkg="prometheus_fuel" type="mission_manager_node" name="mission_manager" required="true">
+      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+      <param name="exploration/initial_plan_timeout" value="1.2"/>
+      <param name="exploration/planner_status_timeout" value="0.4"/>
+    </node>
+  </group>
+  <test test-name="exploration_timeouts" pkg="prometheus_fuel" type="test_exploration_timeouts.py" time-limit="30"/>
+</launch>

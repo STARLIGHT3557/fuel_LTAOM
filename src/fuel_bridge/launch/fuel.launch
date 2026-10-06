@@ -1,11 +1,11 @@
 <launch>
   <arg name="uav_id" default="1"/>
-  <arg name="odom_topic" default="/uav$(arg uav_id)/mavros/local_position/odom"/>
+  <arg name="odom_topic" default="/mavros/local_position/odom"/>
   <!-- MAVROS Odometry twist is body-frame; FUEL planning uses world ENU. -->
   <arg name="odom_twist_in_body" default="true"/>
   <arg name="cloud_topic" default="/livox/lidar_mapping"/>
-  <arg name="battery_topic" default="/uav$(arg uav_id)/mavros/battery"/>
-  <arg name="lidar_frame" default="uav$(arg uav_id)/lidar_link"/>
+  <arg name="battery_topic" default="/mavros/battery"/>
+  <arg name="lidar_frame" default="lidar_link"/>
   <arg name="map_size_x" default="48.0"/>
   <arg name="map_size_y" default="32.0"/>
   <arg name="map_size_z" default="6.0"/>
@@ -81,6 +81,6 @@
   </group>
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="fuel_rviz"
         args="-d $(find prometheus_fuel)/config/fuel.rviz">
-    <remap from="/uav1/mavros/local_position/odom" to="$(arg odom_topic)"/>
+    <remap from="/mavros/local_position/odom" to="$(arg odom_topic)"/>
   </node>
 </launch>

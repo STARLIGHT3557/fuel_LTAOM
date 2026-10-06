@@ -29,11 +29,11 @@ flowchart LR
 
 ### 现在使用什么控制器
 
-当前使用 `src/uav_controller` 的 `ros1` 分支。FUEL 桥接把 `/fuel/position_cmd` 直接转换为 `/uav_controller/trajectory_setpoint`，控制器按位置、速度反馈及加速度前馈计算姿态和推力，并通过 `/uav1/mavros/setpoint_raw/attitude` 发送给 PX4。
+当前使用 `src/uav_controller` 的 `ros1` 分支。FUEL 桥接把 `/fuel/position_cmd` 直接转换为 `/uav_controller/trajectory_setpoint`，控制器按位置、速度反馈及加速度前馈计算姿态和推力，并通过 `/mavros/setpoint_raw/attitude` 发送给 PX4。
 
 FUEL 专用配置 [uav_controller_p600.yaml](../src/fuel_bridge/config/uav_controller_p600.yaml) 启用 `fsm/direct_trajectory`，使用 P600 增益 `k_pos=[8,8,12]`、`k_vel=[4,4,5]` 和悬停油门 `0.258`。空中切入 OFFBOARD 后先锁定当前位置；FUEL 轨迹到达后开始跟踪；停止或超时后回到固定点悬停。
 
-状态接口为 `/uav_controller/fsm_status`，定位直接使用 `/uav1/mavros/local_position/odom`。旧 `prometheus_uav_control`、`UAVCommand` 控制链和独立状态适配器已删除。
+状态接口为 `/uav_controller/fsm_status`，定位直接使用 `/mavros/local_position/odom`。旧 `prometheus_uav_control`、`UAVCommand` 控制链和独立状态适配器已删除。
 
 ## 2. OctoMap 节点无法启动
 
@@ -72,11 +72,11 @@ bash fuel_simulation.sh rviz:=false
 FUEL requires cloud frame lidar_link and odometry frame world
 ```
 
-**原因**：实际点云坐标系是 `uav1/lidar_link`，早期桥接配置期望 `lidar_link`。同时需要核对实际加载模型的外参，不能套用另一个 PX4 模型的雷达位置。
+**原因**：点云发布端与桥接配置中的雷达坐标系不一致。同时需要核对实际加载模型的外参，不能套用另一个 PX4 模型的雷达位置。
 
 **修复**：
 
-- [bridge.yaml](../src/fuel_bridge/config/bridge.yaml) 与 launch 默认使用 `uav1/lidar_link`；里程计使用 `world`。
+- [bridge.yaml](../src/fuel_bridge/config/bridge.yaml) 与 launch 默认使用 `lidar_link`；里程计使用 `world`。
 - 根据实际加载的 [p600_mid360.sdf.jinja](../src/gazebo_simulator/gazebo_models/uav_models/p600_mid360/p600_mid360.sdf.jinja) 计算雷达外参。
 - 用同步里程计将局部雷达点转换为世界坐标，并向 FUEL 同步发布雷达射线原点。
 - 拒绝非有限点、近距离点、过期输入及不匹配的坐标系；错误日志同时打印实际值和期望值。
@@ -89,11 +89,11 @@ y = 0
 z = 0.23 + 0.05 × cos(0.35) = 0.2769686356 m
 ```
 
-点云与里程计允许的同步时间差为 50 ms。当前默认建图输入已改成 `/livox/lidar_mapping`，该话题的 frame 仍为 `uav1/lidar_link`。
+点云与里程计允许的同步时间差为 50 ms。当前默认建图输入已改成 `/livox/lidar_mapping`，该话题的 frame 为 `lidar_link`。
 
 ```bash
 rostopic echo -n 1 /livox/lidar_mapping/header
-rostopic echo -n 1 /uav1/mavros/local_position/odom/header
+rostopic echo -n 1 /mavros/local_position/odom/header
 rostopic hz /fuel/cloud_world
 ```
 
@@ -195,7 +195,7 @@ Points should not be empty for specified marker type.
 
 FUEL 的任务是观测未知空间，不要求机体飞过每个网格。中心若已被周围扫描覆盖，可以不飞进去；如果目标是逐行覆盖或巡检每处位置，需要另行设计覆盖任务。
 
-当前 RViz 的 `Travel` 来自轨迹服务器发布的历史命令位置（`traj_cmd_`），不是实际里程计轨迹。判断飞机实际是否绕圈或跟踪偏离，应结合 `/uav1/mavros/local_position/odom`，不能只看蓝色历史命令线。
+当前 RViz 的 `Travel` 来自轨迹服务器发布的历史命令位置（`traj_cmd_`），不是实际里程计轨迹。判断飞机实际是否绕圈或跟踪偏离，应结合 `/mavros/local_position/odom`，不能只看蓝色历史命令线。
 
 另一方面，仅看到中心的圆柱点云，不等于周围自由空间全部已知。应区分：目标持续改变但地图有进展、目标长期残留且地图无进展，以及规划轨迹正常但实际飞机跟踪偏离。第三种情况要检查控制跟踪，不能靠前沿参数解决。
 
@@ -226,7 +226,7 @@ FUEL 在没有可继续访问的前沿时进入 `FINISH`，打印 `finish explor
 
 ## 12. 当前推荐启动顺序
 
-以下命令均从工程根目录执行，默认无人机为 `uav1`，仅用于本仿真。
+以下命令均从工程根目录执行，默认 MAVLink 编号为 `1`，ROS 话题不添加 `/uav1` 前缀，仅用于本仿真。
 
 ### 编译更新
 
@@ -259,7 +259,7 @@ bash fuel_simulation.sh
 
 ```bash
 source source.sh
-rostopic echo -n 1 /uav1/mavros/state
+rostopic echo -n 1 /mavros/state
 rostopic echo -n 1 /uav_controller/fsm_status
 ```
 
@@ -310,7 +310,7 @@ rosparam get /exploration_node/sdf_map
 ```bash
 rosbag record -O fuel_exploration_debug.bag \
   /clock /rosout /livox/lidar_mapping /fuel/cloud_world /fuel/sensor_pose \
-  /uav1/mavros/local_position/odom /uav_controller/fsm_status \
+  /mavros/local_position/odom /uav_controller/fsm_status \
   /fuel/position_cmd /uav_controller/trajectory_setpoint /planning/bspline /sdf_map/occupancy_all \
   /planning_vis/frontier /planning_vis/trajectory /planning/travel_traj
 ```

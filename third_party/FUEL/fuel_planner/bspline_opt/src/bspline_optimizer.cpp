@@ -107,10 +107,16 @@ void BsplineOptimizer::setTimeLowerBound(const double& lb) {
   time_lb_ = lb;
 }
 
+void BsplineOptimizer::setFixedControlPoints(int start_count, int end_count) {
+  fixed_start_count_ = std::max(0, start_count);
+  fixed_end_count_ = std::max(0, end_count);
+}
+
 void BsplineOptimizer::optimize(Eigen::MatrixXd& points, double& dt, const int& cost_function,
                                 const int& max_num_id, const int& max_time_id) {
   if (start_state_.empty()) {
     ROS_ERROR("Initial state undefined!");
+    fixed_start_count_ = fixed_end_count_ = 0;
     return;
   }
   control_points_ = points;
@@ -126,10 +132,16 @@ void BsplineOptimizer::optimize(Eigen::MatrixXd& points, double& dt, const int& 
   else
     order_ = bspline_degree_;
   point_num_ = control_points_.rows();
+  if (fixed_start_count_ + fixed_end_count_ > point_num_) {
+    ROS_ERROR("Fixed B-spline boundary control points overlap");
+    fixed_start_count_ = fixed_end_count_ = 0;
+    return;
+  }
   optimize_time_ = cost_function_ & MINTIME;
   variable_num_ = optimize_time_ ? dim_ * point_num_ + 1 : dim_ * point_num_;
   if (variable_num_ <= 0) {
     ROS_ERROR("Empty varibale to optimization solver.");
+    fixed_start_count_ = fixed_end_count_ = 0;
     return;
   }
 
@@ -163,6 +175,7 @@ void BsplineOptimizer::optimize(Eigen::MatrixXd& points, double& dt, const int& 
   dt = knot_span_;
   start_state_.clear();
   time_lb_ = -1;
+  fixed_start_count_ = fixed_end_count_ = 0;
 }
 
 void BsplineOptimizer::optimize() {
@@ -200,7 +213,11 @@ void BsplineOptimizer::optimize() {
   for (int i = 0; i < point_num_; ++i)
     for (int j = 0; j < dim_; ++j) {
       double cij = control_points_(i, j);
-      if (dim_ != 1) cij = max(min(cij, bmax[j % 3]), bmin[j % 3]);
+      const bool fixed = i < fixed_start_count_ || i >= point_num_ - fixed_end_count_;
+      // Boundary controls encode p/v/a and may legitimately lie outside the
+      // map even though the B-spline curve is inside it. Clipping them would
+      // silently change the derivative boundary state before NLopt starts.
+      if (dim_ != 1 && !fixed) cij = max(min(cij, bmax[j % 3]), bmin[j % 3]);
       q[dim_ * i + j] = cij;
     }
   // Variables for knot span
@@ -215,6 +232,11 @@ void BsplineOptimizer::optimize() {
       ub[i] = q[i] + bound;
       lb[i] = max(lb[i], bmin[i % 3]);
       ub[i] = min(ub[i], bmax[i % 3]);
+    }
+    for (int i = 0; i < point_num_; ++i) {
+      if (i >= fixed_start_count_ && i < point_num_ - fixed_end_count_) continue;
+      for (int j = 0; j < dim_; ++j)
+        lb[dim_ * i + j] = ub[dim_ * i + j] = q[dim_ * i + j];
     }
     if (optimize_time_) {
       lb[variable_num_ - 1] = 0.0;

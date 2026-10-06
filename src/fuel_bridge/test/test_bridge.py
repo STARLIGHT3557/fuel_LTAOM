@@ -54,7 +54,7 @@ class BridgeTest(unittest.TestCase):
         return_home = rospy.ServiceProxy('/fuel/return_home', Trigger)
         self.assertFalse(start().success)
 
-        def feed(ready=True, frame='uav1/lidar_link', x=2.0, y=3.0, z=1.5,
+        def feed(ready=True, frame='lidar_link', x=2.0, y=3.0, z=1.5,
                  vx=0.0, battery=0.31, yaw=math.pi/2, yaw_rate=0.0, settled=False):
             stamp = rospy.Time.now()
             odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
@@ -127,6 +127,16 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(moves[-1].trajectory_id, 1)
         self.assertAlmostEqual(moves[-1].velocity.x, 0.2, places=5)
         self.assertAlmostEqual(moves[-1].acceleration.y, 0.1, places=5)
+
+        # Repeated planning failures are diagnostic, not a return request.
+        for count in (1, 2, 3, 4, 5, 6, 100):
+            planner_pub.publish(PlannerStatus(header=Header(stamp=rospy.Time.now()),
+                context=explore, state=PlannerStatus.FAILED, consecutive_failures=count))
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+            feed()
+            self.assertEqual(statuses[-1].state, MissionStatus.EXPLORING)
+            self.assertEqual(statuses[-1].context, explore)
 
         wrong = copy.deepcopy(explore)
         wrong.source_id = 'untrusted_planner'

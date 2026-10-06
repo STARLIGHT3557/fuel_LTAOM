@@ -33,6 +33,9 @@ public:
                          const Eigen::Vector3d& end_vel, const double& time_lb = -1);
   void planExploreTraj(const vector<Eigen::Vector3d>& tour, const Eigen::Vector3d& cur_vel,
                        const Eigen::Vector3d& cur_acc, const double& time_lb = -1);
+  bool planReturnTraj(const vector<Eigen::Vector3d>& tour, const Eigen::Vector3d& cur_vel,
+                      const Eigen::Vector3d& cur_acc, bool terminal);
+  bool planReturnYaw(const Eigen::Vector3d& start_yaw, double end_yaw);
   bool planGlobalTraj(const Eigen::Vector3d& start_pos);
   bool topoReplan(bool collide);
 

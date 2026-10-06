@@ -44,6 +44,7 @@ double position_switch_tolerance{0.75};
 double velocity_switch_tolerance{1.0};
 double acceleration_switch_tolerance{2.0};
 double handover_timeout{2.0};
+double handover_margin{0.1};
 double braking_acceleration{1.0};
 
 bool braking{false};
@@ -109,13 +110,13 @@ void evaluateBraking(const ros::Time& stamp, Eigen::Vector3d& position,
   }
 }
 
-bool continuousWithExecution(TrajectorySlot& candidate) {
+bool continuousWithExecution(TrajectorySlot& candidate, const ros::Time& switch_time) {
   Eigen::Vector3d reference_p, reference_v, reference_a, new_p, new_v, new_a;
   double reference_yaw = 0.0, reference_yaw_rate = 0.0, new_yaw, new_yaw_rate;
   if (braking && sameContext(braking_context, candidate.context)) {
-    evaluateBraking(candidate.start_time, reference_p, reference_v, reference_a);
+    evaluateBraking(switch_time, reference_p, reference_v, reference_a);
   } else if (active.valid && sameContext(active.context, candidate.context)) {
-    evaluate(active, candidate.start_time, reference_p, reference_v, reference_a,
+    evaluate(active, switch_time, reference_p, reference_v, reference_a,
              reference_yaw, reference_yaw_rate);
   } else {
     const ros::Time now = ros::Time::now();
@@ -133,7 +134,7 @@ bool continuousWithExecution(TrajectorySlot& candidate) {
     // acceleration relative to the zero-acceleration handover reference.
     reference_a.setZero();
   }
-  evaluate(candidate, candidate.start_time, new_p, new_v, new_a, new_yaw, new_yaw_rate);
+  evaluate(candidate, switch_time, new_p, new_v, new_a, new_yaw, new_yaw_rate);
   const double dp = (reference_p - new_p).norm();
   const double dv = (reference_v - new_v).norm();
   const double da = (reference_a - new_a).norm();
@@ -207,7 +208,14 @@ void splineCallback(const bspline::BsplineConstPtr& msg) {
                   "invalid, unauthorized, or non-increasing B-spline");
     return;
   }
-  if (!continuousWithExecution(candidate)) {
+  const bool return_task = candidate.context.task_type == uav_mission_msgs::TaskContext::RETURN_HOME;
+  const ros::Time now = ros::Time::now();
+  if (return_task && candidate.start_time <= now) {
+    publishStatus(candidate, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                  "trajectory arrived after its scheduled handover time");
+    return;
+  }
+  if (!continuousWithExecution(candidate, std::max(candidate.start_time, now))) {
     publishStatus(candidate, uav_mission_msgs::TrajectoryStatus::REJECTED,
                   "trajectory does not match active position/velocity/acceleration at switch");
     return;
@@ -324,19 +332,34 @@ void fillCommand(const uav_mission_msgs::TaskContext& context, uint64_t id,
 void commandCallback(const ros::TimerEvent&) {
   const ros::Time now = ros::Time::now();
   if (pending.valid) {
+    const bool return_task = pending.context.task_type == uav_mission_msgs::TaskContext::RETURN_HOME;
     publishStatus(pending, uav_mission_msgs::TrajectoryStatus::PENDING,
                   "waiting for controller takeover confirmation");
-    if (!pending.controller_accepted &&
+    if (return_task && !pending.controller_accepted && now >= pending.start_time) {
+      publishStatus(pending, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                    "controller did not confirm before scheduled handover");
+      pending = TrajectorySlot{};
+    } else if (!pending.controller_accepted &&
         (now - pending.received_at).toSec() > handover_timeout) {
       publishStatus(pending, uav_mission_msgs::TrajectoryStatus::REJECTED,
                     "controller handover confirmation timed out");
       pending = TrajectorySlot{};
     } else if (pending.controller_accepted && now >= pending.start_time) {
-      active = pending;
-      pending = TrajectorySlot{};
-      braking = false;  // A validated replacement resumes return after braking.
-      publishStatus(active, uav_mission_msgs::TrajectoryStatus::ACTIVE,
-                    "controller confirmed; switched at agreed start time");
+      if (return_task && (now - pending.start_time).toSec() > handover_margin) {
+        publishStatus(pending, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                      "controller confirmation arrived after handover expiry");
+        pending = TrajectorySlot{};
+      } else if (!continuousWithExecution(pending, now)) {
+        publishStatus(pending, uav_mission_msgs::TrajectoryStatus::REJECTED,
+                      "trajectory is discontinuous at actual activation time");
+        pending = TrajectorySlot{};
+      } else {
+        active = pending;
+        pending = TrajectorySlot{};
+        braking = false;  // A validated replacement resumes return after braking.
+        publishStatus(active, uav_mission_msgs::TrajectoryStatus::ACTIVE,
+                      "controller confirmed; continuity rechecked at activation");
+      }
     }
   }
   if (braking) {
@@ -379,9 +402,11 @@ int main(int argc, char** argv) {
   nh.param("trajectory_handover/velocity_tolerance", velocity_switch_tolerance, 1.0);
   nh.param("trajectory_handover/acceleration_tolerance", acceleration_switch_tolerance, 2.0);
   nh.param("trajectory_handover/timeout", handover_timeout, 2.0);
+  nh.param("return_home/handover_margin", handover_margin, 0.1);
   nh.param("manager/max_acc", braking_acceleration, 1.0);
   if (position_switch_tolerance <= 0.0 || velocity_switch_tolerance <= 0.0 ||
       acceleration_switch_tolerance <= 0.0 || handover_timeout <= 0.0 ||
+      handover_margin < 0.0 || !std::isfinite(handover_margin) ||
       braking_acceleration <= 0.0 || source_id.empty())
     throw std::invalid_argument("invalid trajectory handover/braking parameters");
 

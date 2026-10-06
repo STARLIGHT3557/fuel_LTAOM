@@ -1,0 +1,7 @@
+<launch>
+  <node pkg="plan_manage" type="traj_server" name="handover_test_server" required="true">
+    <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+    <param name="trajectory_handover/timeout" value="0.8"/>
+  </node>
+  <test test-name="exploration_handover" pkg="prometheus_fuel" type="test_exploration_handover.py" time-limit="30"/>
+</launch>

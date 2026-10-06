@@ -23,10 +23,11 @@ void FastExplorationFSM::init(ros::NodeHandle& nh) {
   nh.param("fsm/thresh_replan3", fp_->replan_thresh3_, -1.0);
   nh.param("fsm/replan_time", fp_->replan_time_, -1.0);
   nh.param("exploration/finish_confirm_cycles", finish_confirm_cycles_, 3);
-  nh.param("exploration/max_plan_failures", explore_max_failures_, 3);
   nh.param("exploration/retry_interval", retry_interval_, 1.0);
   nh.param("trajectory_handover/timeout", handover_timeout_, 2.0);
   nh.param("return_home/retry_interval", return_retry_interval_, 1.0);
+  nh.param("return_home/urgent_retry_interval", return_urgent_retry_interval_, 0.1);
+  nh.param("return_home/handover_margin", handover_margin_, 0.1);
   nh.param("return_home/replan_period", return_replan_period_, 1.0);
   nh.param<string>("source_id", source_id_, "fuel_planner");
   nh.param("return_home/position_tolerance", home_tolerance_, 0.20);
@@ -34,8 +35,10 @@ void FastExplorationFSM::init(ros::NodeHandle& nh) {
   vector<double> home;
   if (nh.getParam("home_position", home) && home.size() == 3)
     return_goal_ << home[0], home[1], home[2];
-  if (finish_confirm_cycles_ <= 0 || explore_max_failures_ <= 0 || handover_timeout_ <= 0.0 ||
+  if (finish_confirm_cycles_ <= 0 || handover_timeout_ <= 0.0 ||
       retry_interval_ <= 0.0 || return_retry_interval_ <= 0.0 ||
+      return_urgent_retry_interval_ <= 0.0 || handover_margin_ < 0.0 ||
+      !std::isfinite(return_urgent_retry_interval_) || !std::isfinite(handover_margin_) ||
       return_replan_period_ <= 0.0 || home_tolerance_ <= 0.0 ||
       home_speed_tolerance_ <= 0.0 || !return_goal_.allFinite() || source_id_.empty())
     throw std::invalid_argument("invalid mission planning parameters");
@@ -112,28 +115,7 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
     case PLAN_TRAJ: {
       const ros::Time now = ros::Time::now();
       if (!next_plan_attempt_.isZero() && now < next_plan_attempt_) break;
-      if (fd_->static_state_ || !executing_traj_ || active_trajectory_unsafe_) {
-        fd_->start_pt_ = fd_->odom_pos_;
-        fd_->start_vel_ = fd_->odom_vel_;
-        fd_->start_acc_.setZero();
-        fd_->start_yaw_(0) = fd_->odom_yaw_;
-        fd_->start_yaw_(1) = fd_->start_yaw_(2) = 0.0;
-      } else {
-        LocalTrajData* info = executing_traj_.get();
-        const double elapsed = (now - info->start_time_).toSec();
-        const double t_r = std::min(info->duration_, std::max(0.0, elapsed + fp_->replan_time_));
-        fd_->start_pt_ = info->position_traj_.evaluateDeBoorT(t_r);
-        fd_->start_vel_ = info->velocity_traj_.evaluateDeBoorT(t_r);
-        fd_->start_acc_ = info->acceleration_traj_.evaluateDeBoorT(t_r);
-        fd_->start_yaw_(0) = info->yaw_traj_.evaluateDeBoorT(t_r)[0];
-        fd_->start_yaw_(1) = info->yawdot_traj_.evaluateDeBoorT(t_r)[0];
-        fd_->start_yaw_(2) = info->yawdotdot_traj_.evaluateDeBoorT(t_r)[0];
-        if (t_r >= info->duration_) {
-          fd_->start_vel_.setZero();
-          fd_->start_acc_.setZero();
-          fd_->start_yaw_(1) = fd_->start_yaw_(2) = 0.0;
-        }
-      }
+      if (!preparePlanningStart(now)) break;
 
       publishPlannerStatus(uav_mission_msgs::PlannerStatus::PLANNING,
                            return_home_ ? "planning return segment" : "planning exploration segment");
@@ -154,15 +136,11 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
       } else {
         no_frontier_cycles_ = 0;
         if (plan_failures_ < std::numeric_limits<int>::max()) ++plan_failures_;
-        next_plan_attempt_ = now + ros::Duration(
-            return_home_ ? return_retry_interval_ : retry_interval_);
         publishPlannerStatus(uav_mission_msgs::PlannerStatus::FAILED,
                              return_home_ ? "return planning failed" : "exploration planning failed");
-        // Return is persistent. Retry from measured state if no safe executed
-        // trajectory remains; a failure count never ends the return task.
-        if (active_trajectory_unsafe_ || !executing_traj_) fd_->static_state_ = true;
-        if (!return_home_ && plan_failures_ >= explore_max_failures_)
-          transitState(FINISH, "exploration failures request return");
+        // Failure counts never end a task. The manager still owns battery,
+        // completion and timeout returns; planning failures keep retrying.
+        scheduleRetry(ros::Time::now(), "planning failed");
       }
       break;
     }
@@ -182,9 +160,12 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
 
     case WAIT_EXEC: {
       const ros::Time now = ros::Time::now();
-      if ((now - submitted_at_).toSec() > handover_timeout_ + 0.5) {
-        fd_->static_state_ = true;
-        next_plan_attempt_ = now + ros::Duration(return_home_ ? return_retry_interval_ : retry_interval_);
+      const bool switch_expired = return_home_ && submitted_traj_ &&
+          now > submitted_traj_->start_time_ + ros::Duration(handover_margin_);
+      if (switch_expired || (now - submitted_at_).toSec() > handover_timeout_ + 0.5) {
+        submitted_traj_.reset();
+        if (!return_home_) fd_->static_state_ = true;
+        scheduleRetry(now, switch_expired ? "scheduled handover expired" : "activation timeout");
         transitState(PLAN_TRAJ, "activation timeout; retrying task");
       }
       break;
@@ -261,8 +242,97 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
   }
 }
 
+bool FastExplorationFSM::hasSafeActiveTrajectory(const ros::Time& now) const {
+  if (!executing_traj_ || active_trajectory_unsafe_) return false;
+  const ros::Time end = executing_traj_->start_time_ + ros::Duration(executing_traj_->duration_);
+  return now <= end;
+}
+
+double FastExplorationFSM::activeTrajectoryRemaining(const ros::Time& now) const {
+  if (!executing_traj_) return 0.0;
+  const ros::Time end = executing_traj_->start_time_ + ros::Duration(executing_traj_->duration_);
+  return std::max(0.0, (end - now).toSec());
+}
+
+void FastExplorationFSM::enterBrakingRecovery(const string& reason) {
+  if (!active_trajectory_unsafe_) {
+    active_trajectory_unsafe_ = true;
+    fd_->static_state_ = true;
+    submitted_traj_.reset();
+    publishPlannerStatus(uav_mission_msgs::PlannerStatus::TRAJECTORY_UNSAFE, reason);
+  }
+  next_plan_attempt_ = ros::Time::now() + ros::Duration(return_urgent_retry_interval_);
+}
+
+void FastExplorationFSM::scheduleRetry(const ros::Time& now, const string& reason) {
+  if (!return_home_) {
+    // Preserve exploration's existing behavior: a failed rolling replan keeps
+    // sampling the active trajectory unless no executable reference remains.
+    if (active_trajectory_unsafe_ || !executing_traj_) fd_->static_state_ = true;
+    next_plan_attempt_ = now + ros::Duration(retry_interval_);
+    return;
+  }
+
+  if (return_home_ && hasSafeActiveTrajectory(now) && !fd_->static_state_) {
+    const double remaining = activeTrajectoryRemaining(now);
+    const double lead = fp_->replan_time_ + handover_margin_;
+    const double available_wait = remaining - lead;
+    if (available_wait <= return_urgent_retry_interval_) {
+      ROS_WARN("Return retry cannot meet active trajectory deadline (remaining %.3f s): %s",
+               remaining, reason.c_str());
+      enterBrakingRecovery("return handover window exhausted; controlled braking recovery");
+      return;
+    }
+    const bool urgent = remaining <= lead + return_retry_interval_;
+    const double wait = urgent
+        ? std::min(return_urgent_retry_interval_, available_wait)
+        : std::min(return_retry_interval_, available_wait);
+    fd_->static_state_ = false;
+    next_plan_attempt_ = now + ros::Duration(std::max(0.0, wait));
+    ROS_WARN("Return retry in %.3f s with %.3f s active trajectory remaining: %s",
+             wait, remaining, reason.c_str());
+    return;
+  }
+
+  fd_->static_state_ = true;
+  next_plan_attempt_ = now + ros::Duration(return_urgent_retry_interval_);
+}
+
+bool FastExplorationFSM::preparePlanningStart(const ros::Time& now) {
+  const double lead = fp_->replan_time_ + (return_home_ ? handover_margin_ : 0.0);
+  planning_switch_time_ = now + ros::Duration(lead);
+  if (!fd_->static_state_ && executing_traj_ && !active_trajectory_unsafe_ &&
+      (!return_home_ || hasSafeActiveTrajectory(now))) {
+    LocalTrajData* info = executing_traj_.get();
+    const double switch_t = (planning_switch_time_ - info->start_time_).toSec();
+    if (return_home_ && switch_t >= info->duration_) {
+      enterBrakingRecovery("safe trajectory has no remaining handover window; controlled braking");
+      return false;
+    }
+    const double t = std::max(0.0, std::min(info->duration_, switch_t));
+    fd_->start_pt_ = info->position_traj_.evaluateDeBoorT(t);
+    fd_->start_vel_ = info->velocity_traj_.evaluateDeBoorT(t);
+    fd_->start_acc_ = info->acceleration_traj_.evaluateDeBoorT(t);
+    fd_->start_yaw_(0) = info->yaw_traj_.evaluateDeBoorT(t)[0];
+    fd_->start_yaw_(1) = info->yawdot_traj_.evaluateDeBoorT(t)[0];
+    fd_->start_yaw_(2) = info->yawdotdot_traj_.evaluateDeBoorT(t)[0];
+    if (t >= info->duration_) {
+      // Exploration can replan from the endpoint hold after a delayed attempt.
+      fd_->start_vel_.setZero();
+      fd_->start_acc_.setZero();
+      fd_->start_yaw_(1) = fd_->start_yaw_(2) = 0.0;
+    }
+  } else {
+    fd_->start_pt_ = fd_->odom_pos_;
+    fd_->start_vel_ = fd_->odom_vel_;
+    fd_->start_acc_.setZero();
+    fd_->start_yaw_(0) = fd_->odom_yaw_;
+    fd_->start_yaw_(1) = fd_->start_yaw_(2) = 0.0;
+  }
+  return true;
+}
+
 int FastExplorationFSM::callExplorationPlanner() {
-  ros::Time time_r = ros::Time::now() + ros::Duration(fp_->replan_time_);
 
   // Failed optimizations must not overwrite the last accepted trajectory data.
   const LocalTrajData previous = planner_manager_->local_data_;
@@ -281,10 +351,21 @@ int FastExplorationFSM::callExplorationPlanner() {
   // int res = expl_manager_->rapidFrontier(fd_->start_pt_, fd_->start_vel_, fd_->start_yaw_[0],
   // classic_);
 
+  if (return_home_ && res == SUCCEED &&
+      ros::Time::now() + ros::Duration(handover_margin_) >= planning_switch_time_) {
+    ROS_WARN("Discard trajectory that missed its fixed handover time by %.3f s",
+             (ros::Time::now() - planning_switch_time_).toSec());
+    planner_manager_->local_data_ = previous;
+    return FAIL;
+  }
+
   if (res == SUCCEED) {
     auto info = &planner_manager_->local_data_;
     info->traj_id_ = ++next_trajectory_id_;
-    info->start_time_ = (ros::Time::now() - time_r).toSec() > 0 ? ros::Time::now() : time_r;
+    // Exploration's look-ahead is a nominal planning budget, not a failure
+    // deadline. Late successes still undergo executor continuity checks.
+    info->start_time_ = return_home_ ? planning_switch_time_
+                                   : std::max(planning_switch_time_, ros::Time::now());
 
     bspline::Bspline bspline;
     bspline.context = context_;
@@ -499,13 +580,13 @@ void FastExplorationFSM::missionCallback(
   }
   if (msg->command == uav_mission_msgs::MissionCommand::REPLAN) {
     if (!current || !return_home_ || have_closed_context_) return;
-    // Keep the batch and recovery history. Rebase on the real aircraft after
-    // a transport timeout/rejection instead of extrapolating a rejected spline.
+    // Keep the batch and recovery history. A transport recovery does not
+    // invalidate a still-safe active trajectory.
     if (state_ == EXEC_TRAJ && executing_traj_ && executing_traj_->terminal_return_ &&
         !active_trajectory_unsafe_ &&
         (ros::Time::now() - executing_traj_->start_time_).toSec() < executing_traj_->duration_ + 3.0)
       return;
-    fd_->static_state_ = true;
+    fd_->static_state_ = !hasSafeActiveTrajectory(ros::Time::now());
     if (state_ != PLAN_TRAJ && state_ != WAIT_EXEC && state_ != PUB_TRAJ) {
       next_plan_attempt_ = ros::Time::now();
       transitState(PLAN_TRAJ, "same-task recovery request");
@@ -534,6 +615,7 @@ void FastExplorationFSM::missionCallback(
   plan_failures_ = 0;
   active_trajectory_unsafe_ = false;
   next_plan_attempt_ = ros::Time();
+  planning_switch_time_ = ros::Time();
   last_execution_status_ = ros::Time();
   fd_->static_state_ = true;
   fd_->trigger_ = true;
@@ -569,11 +651,15 @@ void FastExplorationFSM::trajectoryCallback(
              msg->state == uav_mission_msgs::TrajectoryStatus::INVALID) {
     if (plan_failures_ < std::numeric_limits<int>::max()) ++plan_failures_;
     submitted_traj_.reset();
-    fd_->static_state_ = true;
-    if (msg->state == uav_mission_msgs::TrajectoryStatus::INVALID)
+    const ros::Time now = ros::Time::now();
+    if (msg->state == uav_mission_msgs::TrajectoryStatus::INVALID) {
       active_trajectory_unsafe_ = true;
-    next_plan_attempt_ = ros::Time::now() + ros::Duration(
-        return_home_ ? return_retry_interval_ : retry_interval_);
+      fd_->static_state_ = true;
+    } else {
+      fd_->static_state_ = return_home_ ? !hasSafeActiveTrajectory(now) : true;
+    }
+    scheduleRetry(now, msg->state == uav_mission_msgs::TrajectoryStatus::INVALID
+        ? "active trajectory invalid" : "candidate handover rejected");
     publishPlannerStatus(uav_mission_msgs::PlannerStatus::FAILED, "execution rejected; retrying goal");
     transitState(PLAN_TRAJ, "execution recovery");
   }

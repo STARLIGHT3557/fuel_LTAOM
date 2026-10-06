@@ -47,7 +47,6 @@ class MissionManager {
     pnh_.param("battery/data_timeout", battery_timeout_, 2.0);
     pnh_.param("exploration/initial_plan_timeout", initial_plan_timeout_, 10.0);
     pnh_.param("exploration/planner_status_timeout", planner_status_timeout_, 4.0);
-    pnh_.param("exploration/max_plan_failures", explore_max_failures_, 3);
     pnh_.param("return_home/retry_interval", return_retry_interval_, 1.0);
     pnh_.param("return_home/planning_timeout", return_planning_timeout_, 10.0);
     pnh_.param("return_home/position_tolerance", position_tolerance_, 0.20);
@@ -59,7 +58,7 @@ class MissionManager {
     if (!(battery_threshold_ >= 0.0 && battery_threshold_ <= 1.0) ||
         battery_timeout_ <= 0.0 || initial_plan_timeout_ <= 0.0 ||
         planner_status_timeout_ <= 0.0 ||
-        explore_max_failures_ <= 0 || !std::isfinite(return_retry_interval_) ||
+        !std::isfinite(return_retry_interval_) ||
         !std::isfinite(return_planning_timeout_) || return_retry_interval_ <= 0.0 ||
         return_planning_timeout_ <= 0.0 ||
         position_tolerance_ <= 0.0 || speed_tolerance_ <= 0.0 || stable_time_ <= 0.0 ||
@@ -297,10 +296,6 @@ class MissionManager {
       if (msg->state == uav_mission_msgs::PlannerStatus::EXPLORATION_DONE) {
         beginReturn(uav_mission_msgs::MissionStatus::EXPLORATION_DONE,
                     "exploration completed; preparing return");
-      } else if (msg->state == uav_mission_msgs::PlannerStatus::FAILED &&
-                 msg->consecutive_failures >= static_cast<uint32_t>(explore_max_failures_)) {
-        beginReturn(uav_mission_msgs::MissionStatus::EXPLORE_PLAN_FAILED,
-                    "exploration planning failure limit reached");
       } else if (msg->state == uav_mission_msgs::PlannerStatus::OUTPUT_TIMEOUT) {
         beginReturn(uav_mission_msgs::MissionStatus::TRAJECTORY_TIMEOUT,
                     "exploration trajectory output timed out");
@@ -441,7 +436,6 @@ class MissionManager {
   bool replan_requested_{false};
   double position_tolerance_{0.20}, speed_tolerance_{0.15}, stable_time_{1.5}, data_timeout_{0.5};
   double battery_percentage_{std::numeric_limits<double>::quiet_NaN()};
-  int explore_max_failures_{3};
   uint64_t manager_epoch_{0}, last_mission_id_{0};
   uint8_t state_{uav_mission_msgs::MissionStatus::READY};
   uint8_t return_reason_{uav_mission_msgs::MissionStatus::REASON_NONE};

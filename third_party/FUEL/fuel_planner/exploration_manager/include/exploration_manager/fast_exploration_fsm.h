@@ -52,11 +52,12 @@ private:
   bool odom_twist_in_body_{false};
   bool return_home_{false}, active_trajectory_unsafe_{false};
   int no_frontier_cycles_{0}, plan_failures_{0};
-  int finish_confirm_cycles_{3}, explore_max_failures_{3};
-  double retry_interval_{1.0}, return_retry_interval_{1.0};
+  int finish_confirm_cycles_{3};
+  double retry_interval_{1.0}, return_retry_interval_{1.0}, return_urgent_retry_interval_{0.1};
   double return_replan_period_{1.0}, home_tolerance_{0.20}, home_speed_tolerance_{0.15};
   ros::Time next_plan_attempt_, last_execution_status_, submitted_at_, terminal_error_since_;
-  double handover_timeout_{2.0};
+  ros::Time planning_switch_time_;
+  double handover_timeout_{2.0}, handover_margin_{0.1};
   shared_ptr<LocalTrajData> executing_traj_, submitted_traj_;
   int next_trajectory_id_{0};
   Vector3d return_goal_{0.0, 0.0, 1.0};
@@ -76,6 +77,11 @@ private:
   /* helper functions */
   int callExplorationPlanner();
   void transitState(EXPL_STATE new_state, string pos_call);
+  bool preparePlanningStart(const ros::Time& now);
+  bool hasSafeActiveTrajectory(const ros::Time& now) const;
+  double activeTrajectoryRemaining(const ros::Time& now) const;
+  void scheduleRetry(const ros::Time& now, const string& reason);
+  void enterBrakingRecovery(const string& reason);
 
   /* ROS functions */
   void FSMCallback(const ros::TimerEvent& e);

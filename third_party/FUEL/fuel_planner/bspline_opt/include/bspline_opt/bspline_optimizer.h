@@ -45,6 +45,10 @@ public:
   void setCostFunction(const int& cost_function);
   void setBoundaryStates(const vector<Eigen::Vector3d>& start, const vector<Eigen::Vector3d>& end);
   void setTimeLowerBound(const double& lb);
+  // Freeze complete control-point rows for one optimize() call. This is used
+  // by return planning to make the p/v/a boundary states hard constraints
+  // while leaving exploration's existing soft boundary costs unchanged.
+  void setFixedControlPoints(int start_count, int end_count);
 
   // optional inputs
   void setGuidePath(const vector<Eigen::Vector3d>& guide_pt);
@@ -119,6 +123,7 @@ private:
   int variable_num_;  // optimization variables
   int point_num_;
   bool optimize_time_;
+  int fixed_start_count_{0}, fixed_end_count_{0};
   int iter_num_;                       // iteration of the solver
   std::vector<double> best_variable_;  //
   double min_cost_;                    //

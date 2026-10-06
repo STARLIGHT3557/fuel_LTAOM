@@ -17,7 +17,7 @@
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="$(arg gui)"/>
   </include>
-  <group ns="uav$(arg uav_id)">
+  <group>
     <param name="p600_sdf" command="'$(find prometheus_gazebo)/scripts/jinja_gen.py' --mavlink_id=$(arg uav_id) --mavlink_tcp_port=$(arg tcp_port) --mavlink_udp_port=$(arg udp_port) '$(find prometheus_gazebo)/gazebo_models/uav_models/p600_mid360/p600_mid360.sdf.jinja'"/>
     <node name="sitl" pkg="prometheus_gazebo" type="px4_sitl.sh" output="screen" required="true" args="$(arg ID)"/>
     <node name="spawn" pkg="gazebo_ros" type="spawn_model" output="screen"

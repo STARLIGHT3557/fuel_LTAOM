@@ -59,7 +59,7 @@ class ReturnRecoveryTest(unittest.TestCase):
                                            output_policy='CLOSED_LOOP', phase='HOLD'))
             battery_pub.publish(BatteryState(header=Header(stamp=stamp), percentage=0.31))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
-                Header(stamp=stamp, frame_id='uav1/lidar_link'), [(2, 0, 0)]))
+                Header(stamp=stamp, frame_id='lidar_link'), [(2, 0, 0)]))
             if handoffs and handoffs[-1].state == TrajectoryStatus.PENDING:
                 handoff = handoffs[-1]
                 ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=handoff.context,
@@ -92,9 +92,9 @@ class ReturnRecoveryTest(unittest.TestCase):
                           'missing output must request same-batch replan')
             self.assertTrue(all(t.context == context for t in tasks if t.context.mission_id))
 
-            def send_spline(identifier, x):
+            def send_spline(identifier, x, start_delay=0.1):
                 spline = Bspline(context=context, order=3, traj_id=identifier,
-                                 start_time=rospy.Time.now() + rospy.Duration(0.1), yaw_dt=0.2)
+                                 start_time=rospy.Time.now() + rospy.Duration(start_delay), yaw_dt=0.2)
                 spline.pos_pts = [Point(x, 0.0, 1.0) for _ in range(7)]
                 spline.knots = [(i - 3) * 0.2 for i in range(11)]
                 spline.yaw_pts = [0.0] * 7
@@ -105,6 +105,17 @@ class ReturnRecoveryTest(unittest.TestCase):
                           'bridge did not reopen for recovered return output')
             self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
                           'valid replacement did not resume return')
+
+            # A late replacement must be rejected without clearing the safe
+            # trajectory that is already executing.
+            point_count = len(points)
+            send_spline(2, 2.0, start_delay=-0.01)
+            self.wait_for(lambda: any(t.trajectory_id == 2 and
+                                      t.state == TrajectoryStatus.REJECTED for t in handoffs),
+                          'executor accepted an expired handover candidate')
+            self.wait_for(lambda: any(p.trajectory_id == 1 and not p.finished
+                                      for p in points[point_count:]),
+                          'expired candidate interrupted the safe active trajectory')
 
             velocity[0] = 0.4
             time.sleep(0.1)

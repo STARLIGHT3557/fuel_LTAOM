@@ -79,7 +79,7 @@ class PersistentReturnPlannerTest(unittest.TestCase):
                         distance = min(distance, floor_distance)
                 points.append((distance*x, distance*y, distance*z))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
-                Header(stamp=stamp, frame_id='uav1/lidar_link'), points))
+                Header(stamp=stamp, frame_id='lidar_link'), points))
             if handoffs and handoffs[-1].state == TrajectoryStatus.PENDING:
                 item = handoffs[-1]
                 ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=item.context,

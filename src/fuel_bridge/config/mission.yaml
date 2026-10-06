@@ -10,7 +10,7 @@ battery:
 
 exploration:
   finish_confirm_cycles: 3
-  max_plan_failures: 3
+  # Planning failures retry without a count limit; battery and timeout returns remain active.
   retry_interval: 1.0
   initial_plan_timeout: 10.0
   planner_status_timeout: 4.0
@@ -19,6 +19,12 @@ return_home:
   replan_period: 1.0
   # Timeouts request recovery; return has no failure-count or total-time limit.
   retry_interval: 1.0
+  # A failed candidate keeps using a safe active trajectory. Retry sooner when
+  # its remaining execution window can no longer accommodate the normal delay.
+  urgent_retry_interval: 0.1
+  # Reserved after planning for transport, controller acknowledgement and the
+  # activation-time continuity recheck at the single scheduled switch time.
+  handover_margin: 0.1
   planning_timeout: 10.0
   position_tolerance: 0.20
   speed_tolerance: 0.15
