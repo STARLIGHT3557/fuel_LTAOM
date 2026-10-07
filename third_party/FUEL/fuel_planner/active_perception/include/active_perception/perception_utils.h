@@ -41,6 +41,7 @@ private:
   /* Params */
   bool lidar_360_;
   double lidar_min_elevation_, lidar_max_elevation_, lidar_pitch_;
+  Eigen::Matrix3d lidar_rotation_;
   // Sensing range of camera
   double left_angle_, right_angle_, top_angle_, max_dist_, vis_dist_;
   // Normal vectors of camera FOV planes in camera frame

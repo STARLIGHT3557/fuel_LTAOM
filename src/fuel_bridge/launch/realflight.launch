@@ -1,0 +1,52 @@
+<launch>
+  <!-- Prepared by fuel_realflight.sh from the onboard LIO configuration. -->
+  <arg name="sensor_config"/>
+  <arg name="controller_params" default="$(find prometheus_fuel)/config/uav_controller_realflight.yaml"/>
+  <arg name="mission_config" default="$(find prometheus_fuel)/config/mission.yaml"/>
+  <arg name="world_frame" default="map"/>
+  <arg name="odom_topic" default="/mavros/local_position/odom"/>
+  <arg name="odom_twist_in_body" default="true"/>
+  <arg name="cloud_topic" default="/laserMapping/cloud_registered_body"/>
+  <arg name="battery_topic" default="/mavros/battery"/>
+  <arg name="map_size_x" default="20.0"/>
+  <arg name="map_size_y" default="20.0"/>
+  <arg name="map_size_z" default="6.0"/>
+  <arg name="box_min_x" default="-5.0"/>
+  <arg name="box_min_y" default="-5.0"/>
+  <arg name="box_min_z" default="0.5"/>
+  <arg name="box_max_x" default="5.0"/>
+  <arg name="box_max_y" default="5.0"/>
+  <arg name="box_max_z" default="2.0"/>
+  <arg name="max_vel" default="0.5"/>
+  <arg name="max_acc" default="0.5"/>
+  <arg name="rviz" default="true"/>
+
+  <param name="use_sim_time" value="false"/>
+  <include file="$(find uav_controller)/launch/geometric_controller.launch">
+    <arg name="params_file" value="$(arg controller_params)"/>
+  </include>
+  <!-- Keep FUEL direct-trajectory behavior even with onboard gain files. -->
+  <param name="geometric_controller_node/fsm/direct_trajectory" value="true"/>
+  <param name="geometric_controller_node/fsm/position_step" value="false"/>
+  <include file="$(find prometheus_fuel)/launch/fuel.launch">
+    <arg name="sensor_config" value="$(arg sensor_config)"/>
+    <arg name="mission_config" value="$(arg mission_config)"/>
+    <arg name="world_frame" value="$(arg world_frame)"/>
+    <arg name="odom_topic" value="$(arg odom_topic)"/>
+    <arg name="odom_twist_in_body" value="$(arg odom_twist_in_body)"/>
+    <arg name="cloud_topic" value="$(arg cloud_topic)"/>
+    <arg name="battery_topic" value="$(arg battery_topic)"/>
+    <arg name="map_size_x" value="$(arg map_size_x)"/>
+    <arg name="map_size_y" value="$(arg map_size_y)"/>
+    <arg name="map_size_z" value="$(arg map_size_z)"/>
+    <arg name="box_min_x" value="$(arg box_min_x)"/>
+    <arg name="box_min_y" value="$(arg box_min_y)"/>
+    <arg name="box_min_z" value="$(arg box_min_z)"/>
+    <arg name="box_max_x" value="$(arg box_max_x)"/>
+    <arg name="box_max_y" value="$(arg box_max_y)"/>
+    <arg name="box_max_z" value="$(arg box_max_z)"/>
+    <arg name="max_vel" value="$(arg max_vel)"/>
+    <arg name="max_acc" value="$(arg max_acc)"/>
+    <arg name="rviz" value="$(arg rviz)"/>
+  </include>
+</launch>

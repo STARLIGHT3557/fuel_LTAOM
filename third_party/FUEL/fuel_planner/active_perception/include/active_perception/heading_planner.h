@@ -151,6 +151,7 @@ public:
 };
 
 class HeadingPlanner {
+  std::string world_frame_{"world"};
 public:
   HeadingPlanner(ros::NodeHandle& nh);
   ~HeadingPlanner();

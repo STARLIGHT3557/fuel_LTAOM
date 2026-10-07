@@ -100,6 +100,7 @@ void Graph::dijkstraSearch(const int& start, const int& goal, vector<YawVertex::
 }
 
 HeadingPlanner::HeadingPlanner(ros::NodeHandle& nh) {
+  nh.param<std::string>("world_frame", world_frame_, "world");
   frontier_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/heading_planner/frontier", 20);
   visib_pub_ = nh.advertise<sensor_msgs::PointCloud2>("/heading_planner/visib", 20);
   box_pub_ = nh.advertise<visualization_msgs::Marker>("/heading_planner/box", 20);
@@ -419,7 +420,7 @@ void HeadingPlanner::calcFovAABB(const Eigen::Matrix3d& R_wc, const Eigen::Vecto
 
 void HeadingPlanner::visualizeBox(const Eigen::Vector3d& lb, const Eigen::Vector3d& ub) {
   visualization_msgs::Marker mk;
-  mk.header.frame_id = "world";
+  mk.header.frame_id = world_frame_;
   mk.header.stamp = ros::Time::now();
   mk.type = visualization_msgs::Marker::CUBE;
   mk.action = visualization_msgs::Marker::ADD;
@@ -508,7 +509,7 @@ void HeadingPlanner::setFrontier(const vector<vector<Eigen::Vector3d>>& frontier
   frontier_->width = frontier_->points.size();
   frontier_->height = 1;
   frontier_->is_dense = true;
-  frontier_->header.frame_id = "world";
+  frontier_->header.frame_id = world_frame_;
 
   ft_kdtree_.setInputCloud(frontier_);
 }

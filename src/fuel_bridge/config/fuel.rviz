@@ -53,10 +53,6 @@ Visualization Manager:
       Name: Exploration area
       Enabled: true
       Marker Topic: /fuel/exploration_bounds
-    - Class: rviz/Marker
-      Name: UAV model
-      Enabled: true
-      Marker Topic: /fuel/uav_mesh
     - Class: rviz/Odometry
       Name: UAV odometry
       Enabled: true
@@ -74,4 +70,4 @@ Visualization Manager:
       Distance: 35
       Pitch: 0.8
       Yaw: 0.8
-      Focal Point: {X: 10.5, Y: -0.5, Z: 1.5}
+      Focal Point: {X: 0, Y: 0, Z: 1}

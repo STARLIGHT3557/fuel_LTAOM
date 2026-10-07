@@ -43,11 +43,12 @@ class FuelBridge {
   ros::Time cloud_stamp_, state_stamp_, last_command_, started_;
   Eigen::Vector3d lidar_translation_;
   Eigen::Matrix3d lidar_rotation_;
+  Eigen::Vector3d cloud_translation_;
+  Eigen::Matrix3d cloud_rotation_;
   Eigen::Vector3d bounds_min_, bounds_max_;
   bool have_bounds_ = false;
-  std::string world_frame_, lidar_frame_, source_id_;
+  std::string world_frame_, lidar_frame_, cloud_frame_, source_id_;
   double min_range_, data_timeout_, command_timeout_, planning_timeout_;
-  double no_return_range_;
   bool active_ = false;
   bool timeout_reported_ = false;
   uint64_t trajectory_id_ = 0;
@@ -113,9 +114,9 @@ class FuelBridge {
 
   void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& cloud,
                      const nav_msgs::OdometryConstPtr& odom) {
-    if (cloud->header.frame_id != lidar_frame_ || odom->header.frame_id != world_frame_) {
-      ROS_ERROR_THROTTLE(2.0, "FUEL frame mismatch: cloud='%s' (expected '%s'), odometry='%s' (expected '%s'). Check lidar_frame and odom_topic.",
-                         cloud->header.frame_id.c_str(), lidar_frame_.c_str(),
+    if (cloud->header.frame_id != cloud_frame_ || odom->header.frame_id != world_frame_) {
+      ROS_ERROR_THROTTLE(2.0, "FUEL frame mismatch: cloud='%s' (expected '%s'), odometry='%s' (expected '%s'). Check cloud_frame and odom_topic.",
+                         cloud->header.frame_id.c_str(), cloud_frame_.c_str(),
                          odom->header.frame_id.c_str(), world_frame_.c_str());
       return;
     }
@@ -133,13 +134,14 @@ class FuelBridge {
     output.reserve(input.size());
     for (const auto& point : input) {
       Eigen::Vector3d p(point.x, point.y, point.z);
-      // Legacy zero/invalid returns cannot certify free space. The simulation
-      // mapping topic instead preserves no-hit rays at the sensor range limit.
-      if (!p.allFinite() || p.norm() < min_range_) continue;
-      const Eigen::Vector3d w = origin + sensor_rotation * p;
+      if (!p.allFinite()) continue;
+      // FAST-LIO's deskewed cloud is in its IMU frame. Its coordinate
+      // origin differs from the LiDAR ray origin used for range filtering.
+      const Eigen::Vector3d body_point = cloud_translation_ + cloud_rotation_ * p;
+      if ((body_point - lidar_translation_).norm() < min_range_) continue;
+      const Eigen::Vector3d w = position + rotation * body_point;
       output.push_back(pcl::PointXYZ(w.x(), w.y(), w.z()));
-      if (no_return_range_ <= 0.0 || p.norm() < no_return_range_ - 1e-3)
-        hits.push_back(output.back());
+      hits.push_back(output.back());
     }
     if (output.empty()) return;
     sensor_msgs::PointCloud2 result;
@@ -314,23 +316,43 @@ public:
   FuelBridge() {
     pnh_.param<std::string>("world_frame", world_frame_, "world");
     pnh_.param<std::string>("lidar_frame", lidar_frame_, "lidar_link");
+    pnh_.param<std::string>("cloud_frame", cloud_frame_, lidar_frame_);
     pnh_.param<std::string>("source_id", source_id_, "fuel_planner");
     if (source_id_.empty()) throw std::invalid_argument("source_id must not be empty");
     pnh_.param("min_range", min_range_, 0.6);
-    pnh_.param("no_return_range", no_return_range_, 40.0);
     pnh_.param("data_timeout", data_timeout_, 0.5);
     pnh_.param("command_timeout", command_timeout_, 0.5);
     pnh_.param("planning_timeout", planning_timeout_, 10.0);
     double roll, pitch, yaw;
-    pnh_.param("lidar_x", lidar_translation_.x(), 0.13);
+    pnh_.param("lidar_x", lidar_translation_.x(), 0.0);
     pnh_.param("lidar_y", lidar_translation_.y(), 0.0);
-    pnh_.param("lidar_z", lidar_translation_.z(), 0.28);
+    pnh_.param("lidar_z", lidar_translation_.z(), 0.0);
     pnh_.param("lidar_roll", roll, 0.0);
     pnh_.param("lidar_pitch", pitch, 0.0);
     pnh_.param("lidar_yaw", yaw, 0.0);
     lidar_rotation_ = (Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
                        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
                        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).toRotationMatrix();
+    cloud_translation_ = lidar_translation_;
+    cloud_rotation_ = lidar_rotation_;
+    std::vector<double> cloud_translation, cloud_rotation;
+    const bool have_translation = pnh_.getParam("cloud_translation", cloud_translation);
+    const bool have_rotation = pnh_.getParam("cloud_rotation", cloud_rotation);
+    if (have_translation != have_rotation ||
+        (have_translation && (cloud_translation.size() != 3 || cloud_rotation.size() != 9)))
+      throw std::invalid_argument("cloud_translation and cloud_rotation require 3 and 9 values");
+    if (have_translation) {
+      for (int i = 0; i < 3; ++i) {
+        cloud_translation_[i] = cloud_translation[i];
+        for (int j = 0; j < 3; ++j) cloud_rotation_(i, j) = cloud_rotation[3*i + j];
+      }
+    }
+    if (!cloud_translation_.allFinite() || !cloud_rotation_.allFinite() ||
+        !lidar_translation_.allFinite() || !lidar_rotation_.allFinite() ||
+        !(cloud_rotation_.transpose() * cloud_rotation_).isApprox(Eigen::Matrix3d::Identity(), 1e-5) ||
+        std::abs(cloud_rotation_.determinant() - 1.0) > 1e-5 ||
+        !std::isfinite(min_range_) || min_range_ < 0.0 || cloud_frame_.empty() || world_frame_.empty())
+      throw std::invalid_argument("Invalid cloud/LiDAR extrinsics or frame configuration");
     configureBounds();
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_world", 2);
     hits_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_hits_world", 2);

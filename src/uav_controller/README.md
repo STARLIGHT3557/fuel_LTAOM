@@ -33,7 +33,7 @@ Run the position-step test:
 roslaunch uav_controller fixed_point_test.launch
 ```
 
-The FUEL integration launches `geometric_controller.launch` with its own P600 parameter file and supplies `TrajectorySetpoint` messages directly.
+The FUEL integration launches `geometric_controller.launch` with configurable real-flight parameters and supplies `TrajectorySetpoint` messages directly. Use `fuel_realflight.sh` from the repository root; pass `controller_params` to use calibrated onboard gains and hover thrust.
 
 ## Main interfaces
 

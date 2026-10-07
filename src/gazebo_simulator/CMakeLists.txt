@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.0.2)
-project(prometheus_gazebo)
-find_package(catkin REQUIRED)
-catkin_package()
-catkin_install_python(PROGRAMS scripts/jinja_gen.py DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-install(PROGRAMS scripts/px4_sitl.sh DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-install(DIRECTORY launch config gazebo_models gazebo_worlds DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

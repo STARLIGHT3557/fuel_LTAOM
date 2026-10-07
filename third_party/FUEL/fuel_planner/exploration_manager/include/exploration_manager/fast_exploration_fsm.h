@@ -65,6 +65,7 @@ private:
   uav_mission_msgs::TaskContext authorization_;
   uav_mission_msgs::TaskContext closed_context_;
   string source_id_{"fuel_planner"};
+  std::string world_frame_{"world"};
   uav_mission_msgs::MissionCommand last_mission_command_;
   bool have_mission_command_{false}, have_closed_context_{false};
 

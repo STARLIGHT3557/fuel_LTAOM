@@ -17,6 +17,7 @@ using std::vector;
 namespace fast_planner {
 class PlanningVisualization {
 private:
+  std::string world_frame_{"world"};
   enum TRAJECTORY_PLANNING_ID {
     GOAL = 1,
     PATH = 200,

@@ -89,8 +89,8 @@ class BridgeTest(unittest.TestCase):
         self.assertTrue(clouds and poses and bounds)
         self.assertEqual(len(bounds[-1].points), 24)
         points = list(point_cloud2.read_points(clouds[-1], field_names=('x', 'y', 'z')))
-        self.assertEqual(len(points), 2, 'Keep max-range rays for mapping')
-        self.assertEqual(hits[-1].width, 1, 'Do not visualize no-hit endpoints as obstacles')
+        self.assertEqual(len(points), 2, 'Keep all valid measured returns')
+        self.assertEqual(hits[-1].width, 2, 'Every measured return remains visible')
         for actual, expected in zip(points[0], (2, 4.0865176032, 1.4340708282)):
             self.assertAlmostEqual(actual, expected, places=4)
         self.assertEqual(clouds[-1].header.stamp, poses[-1].header.stamp)

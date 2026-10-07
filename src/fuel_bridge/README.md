@@ -1,175 +1,80 @@
-# FUEL / Prometheus P600 MID360
+# FUEL 实机桥接
 
-本模块接入完整 [HKUST FUEL](https://github.com/HKUST-Aerial-Robotics/FUEL)：前沿搜索、探索任务规划、B 样条轨迹规划和轨迹执行。Gazebo、PX4、MAVROS 和 Prometheus 控制器复用当前工程。
+本模块使用已有 MID360／Faster-LIO 和 MAVROS，连接 FUEL 规划器、任务管理器及 `uav_controller`。环境、编译及启动步骤见 [根目录 README](../../README.md)。
 
-接入过程中各项报错、原因、修复与验证记录见 [仿真问题与解决记录](../../docs/TROUBLESHOOTING.md)。
+## 数据路径
 
-## 编译
-
-依赖准备见 [项目 README](../../README.md)。从工程根目录编译全部节点和插件：
-
-```bash
-bash compile_fuel.sh
+```text
+MID360 → Faster-LIO → 去畸变 IMU 系点云 ─┐
+Faster-LIO → 机载 EKF/位姿转发 → PX4 → MAVROS 定位 ─┤
+                                       ↓
+                    fuel_bridge → 世界系点云 + 雷达位姿 → FUEL
+                                                           ↓
+                      任务管理器 ↔ 轨迹执行器 → fuel_bridge
+                                                           ↓
+                      uav_controller → MAVROS 姿态/推力 → PX4
 ```
 
-完整 FUEL 源码已纳入 `third_party/FUEL/`，固定来源提交为 `662dd23c7b52b258d3c4a0155ff6632118e8984f`，修复直接合入源码。`src/fuel` 链接到其中的规划模块；上游演示和仿真器完整保留，但不参与本工程构建。构建输出为 `build/fuel/`、`devel/fuel/`，默认两个任务，可设置 `FUEL_BUILD_JOBS=4`。
+规划器和控制器均使用 MAVROS 局部 ENU 坐标。去畸变点云在 LIO IMU 系，因此不依赖 FAST-LIO 世界原点与 PX4 原点相同。桥接将点云和 MAVROS 里程计近似同步，时间差不超过 50 ms；数据过旧、坐标系错误、非有限点或无效姿态会被拒绝。
 
-所有节点使用同一 Catkin 工作空间，运行 `source source.sh` 即可加载环境。无需下载上游或手动编译旧工程。
+本机 Faster-LIO 的 `/laserMapping/cloud_registered_body` 实际由 `PointBodyLidarToIMU` 生成，帧默认 `imu`，不是飞机 FLU 机体系。不要将 `/laserMapping/cloud_registered` 的世界系点云送入同一入口。
 
-## 启动和探索
+## 外参
 
-关闭已有仿真，然后在工程根目录运行：
+`prepare_realflight.py` 读取机载 LIO YAML，只写本工作空间的运行配置。采用与机载源码一致的定义：
 
-```bash
-bash fuel_simulation.sh
+```text
+p_I = R_IB p_B + t_IB       # mapping/imu_body_R, imu_body_T
+p_I = R_IL p_L + t_IL       # mapping/extrinsic_R, extrinsic_T
+R_BI = R_IBᵀ
+ t_BI = -R_IBᵀ t_IB
+R_BL = R_IBᵀ R_IL
+ t_BL = R_IBᵀ(t_IL - t_IB)
+p_W = p_WB + R_WB(t_BI + R_BI p_I)
+雷达射线原点 = p_WB + R_WB t_BL
 ```
 
-切换到 XTDrone 的 `indoor4` 迷宫场景（先关闭已有仿真）：
+I 为 LIO 使用的 IMU 系，B 为飞机 FLU，L 为 LiDAR，W 为 MAVROS 局部 ENU。点云坐标原点和雷达射线原点分别处理；近距离过滤也相对真实雷达原点计算。桥接与候选观察点的视场使用相同的雷达安装位置和完整 roll/pitch/yaw。
 
-```bash
-bash fuel_simulation.sh scene:=indoor4
-```
+只处理真实有效回波；无回波方向不会被伪造为自由空间。超过地图建图量程的真实回波仍可按 FUEL 原有射线截断逻辑清空沿途空间，截断位置不记为障碍。RViz 显示所有有效回波。
 
-默认仍为圆柱场，也可使用 `scene:=cylinder`。`indoor4` 包含 150 面墙，场地约 68×54 m；出生点为 Gazebo `(0, -1)`，起飞指令仍使用局部坐标 `[0, 0, 1.5]`。入口自动设置 80×64×6 m 地图，局部探索边界为 x∈[-31,39]、y∈[-26,29]、z∈[0.5,2.0] m。墙高 2.5 m，探索目标高度上限设为 2 m。自定义出生点时边界会自动换算，若超出地图分配范围，还需扩大 `map_size_x/map_size_y`。
+修改 LIO 外参后重新启动本工程；动态外参估计不在此固定外参接口支持范围内。启动脚本会校验旋转矩阵、有限值、发布开关及 `extrinsic_est_en`。
 
-此场景已通过 launch 参数解析及静态资源检查；实际飞行验证因系统磁盘空间不足尚未完成。现有 `scripts/check_simulation.py` 使用圆柱场边界，仅适用于默认圆柱场。
-
-
-它启动原 P600/MID360 Gazebo 场景、MAVROS、Prometheus 控制器和 FUEL。FUEL 自己维护占据栅格和 ESDF，不依赖 OctoMap，也不需要启动 `3dlidar_to_octomap.launch` 或 SUPER。只打开一个 FUEL RViz，默认显示世界坐标点云、地图、前沿、无人机模型和黄色探索边界框；`rviz:=false` 可关闭 RViz。模型复用 Prometheus 发布的 `hummingbird.mesh` 示意模型，并非 Gazebo P600 的完整外观。所有节点及模型资源在同一工作空间解析。
-
-按 [根目录启动说明](../../README.md) 切换 OFFBOARD、解锁并起飞到约 1.5 m，等待无人机悬停、FUEL 日志出现 `WAIT_TRIGGER` 且 RViz 中已有地图。点击 RViz 工具栏的 **2D Nav Goal**，在地图上按住左键拖出方向箭头并松开，即可开始探索，无需调用服务。
-
-FUEL 应在起飞前就开始接收点云，保留起飞过程的地图。MID360 的下视角很小且雷达高于机体，仅在空中静止时启动建图，机体附近可能仍是未知空间，导致 `No path to next viewpoint`。
-
-需要命令行触发时，也可使用：
-
-```bash
-source /opt/ros/noetic/setup.bash
-rosservice call /fuel/start "{}"
-```
-
-RViz 的 **2D Nav Goal** 发布到 `/move_base_simple/goal`，可在 **Tool Properties** 中检查。点击位置只用于启动探索，探索目标由 FUEL 自主选择。若条件未满足，终端会打印 `RViz 2D Nav Goal did not start exploration` 及原因；满足条件后重新点击即可。桥接节点检查最近的定位、点云、控制状态、起飞高度和悬停速度；条件未满足时会返回失败原因，不自动解锁或起飞。
-
-停止探索并请求当前位置悬停：
-
-```bash
-rosservice call /fuel/stop "{}"
-```
-
-悬停后可再次调用 `/fuel/start`。规划器会保留已建地图，从当前位置重新规划。不要同时运行 SUPER/EGO 的轨迹服务器，以免多个节点向同一控制器发指令。
-
-## 数据接口与参数
+## 接口
 
 | 接口 | 默认话题 / 类型 |
 | --- | --- |
-| 定位 | `/mavros/local_position/odom`，`nav_msgs/Odometry` |
-| 原始点云 | `/livox/lidar`，`sensor_msgs/PointCloud2`，`lidar_link` 坐标系 |
-| 仿真建图输入（默认） | `/livox/lidar_mapping`，真实回波及 40 m 无回波射线端点 |
-| RViz 真实回波 | `/fuel/cloud_hits_world`，不显示无回波端点 |
-| 转换后的建图射线与传感器位姿 | `/fuel/cloud_world`、`/fuel/sensor_pose`，相同时间戳、`world` 坐标系 |
-| FUEL 轨迹指令 | `/fuel/position_cmd`，本工程的 `quadrotor_msgs/PositionCommand` |
-| 控制器轨迹输入 | `/uav_controller/trajectory_setpoint`，`uav_controller/TrajectorySetpoint` |
-| 控制状态 | `/uav_controller/fsm_status`，`uav_controller/FlightStatus` |
-| FUEL 地图、前沿 | `/sdf_map/occupancy_all`、`/planning_vis/frontier` |
-| 探索边界框 | `/fuel/exploration_bounds`，黄色线框，局部定位坐标系 |
+| 定位输入 | `/mavros/local_position/odom`，`nav_msgs/Odometry` |
+| 点云输入 | `/laserMapping/cloud_registered_body`，`sensor_msgs/PointCloud2` |
+| 世界系点云 | `/fuel/cloud_world`、`/fuel/cloud_hits_world` |
+| 雷达位姿 | `/fuel/sensor_pose`，与点云时间戳、坐标系相同 |
+| 规划轨迹指令 | `/fuel/position_cmd`，`quadrotor_msgs/PositionCommand` |
+| 控制器输入 | `/uav_controller/trajectory_setpoint`，`uav_controller/TrajectorySetpoint` |
+| 控制反馈 | `/uav_controller/fsm_status`，`uav_controller/FlightStatus` |
+| 任务状态 | `/fuel/mission_status`，`uav_mission_msgs/MissionStatus` |
+| 控制器输出 | `/mavros/setpoint_raw/attitude`，`mavros_msgs/AttitudeTarget` |
+| 探索边界 | `/fuel/exploration_bounds` |
 
-`config/bridge.yaml` 设置传感器外参、滤波和超时。实际加载的模型是本工程 `src/gazebo_simulator/gazebo_models/uav_models/p600_mid360/p600_mid360.sdf.jinja`。其中雷达安装位置为 `(0.13, 0, 0.23)` m、俯仰角为 `0.35 rad`；叠加雷达局部 z 轴上 `0.05 m` 的射线原点偏移后，桥接外参为 `(0.1471448904, 0, 0.2769686356)` m、俯仰角 `0.35 rad`。修改模型后必须同步修改桥接外参及 `mid360.yaml` 中的雷达位置和安装角；候选观察点的视场、遮挡射线均从实际雷达位置计算。输入必须是雷达局部坐标点云，不能将世界坐标点云再次送入转换。同步时间差上限为 50 ms；桥接节点剔除非有限点和 0.6 m 内点，过滤旧话题的零距离点及机体点。
+`world_frame` 必须与 MAVROS 里程计的 `header.frame_id` 一致，实机入口默认 `map`；所有建图、轨迹、任务状态和可视化使用同一坐标系。`odom_twist_in_body` 默认 `true`，将 MAVROS 的机体系里程计线速度转成规划所需世界系速度。控制器继续使用 `/mavros/local_position/velocity_local`。
 
-仿真插件通过独立的 `/livox/lidar_mapping` 保留没有碰到物体的射线方向，端点位于模型最大量程 40 m；零距离、近距离和 NaN 不会作为清空射线。FUEL 将超出 `sdf_map/max_ray_length` 的端点截断，仅更新沿途自由空间，不把截断端点标成障碍物。当前建图量程 10 m 必须小于传感器量程 40 m。`bridge.yaml` 的 `no_return_range` 与模型最大量程保持一致，用于从 RViz 真实回波显示中排除这些端点。
+`source.sh` 保留已有工作空间叠加环境。默认定位配置路径为 `~/fast_lio/faster-lio/config/mid360.yaml`；可通过 `lio_config:=...` 或 `FAST_LIO_CONFIG` 指定，`FAST_LIO_ROOT` 可改变默认根目录。生成外参及 TSP 临时文件默认放在 `build/fuel_runtime`，可用 `FUEL_TSP_DIR` 覆盖。
 
-原 `/livox/lidar` 保持原有输出。对照实验使用仅有真实回波的旧话题时可传 `cloud_topic:=/livox/lidar`，但无法凭丢失的射线方向清除无回波区域，不能把零点当作远距离自由空间。
+仅启动规划器的 `fuel.launch` 不启动控制器，直接使用时必须传入正确的 `sensor_config`、`world_frame`、点云和定位话题；机载完整入口为 `fuel_realflight.sh`。
 
-`config/mid360.yaml` 设置 0.2 m 地图分辨率、0.4 m 障碍膨胀、10 m 建图射线范围及 MID360 360° 水平、约 -7°～53° 垂直视场。桥接将 FUEL 的位置、速度、加速度和 yaw 直接转换为新控制器的 `TrajectorySetpoint`；`config/uav_controller_p600.yaml` 启用 `direct_trajectory`，并保留 P600 已验证的增益与悬停油门。
+## 任务行为
 
-默认地图分配尺寸为 48×32×6 m，探索区域按 `planning_easy2.world` 的圆柱场及西侧起飞入口设置。圆柱中心约覆盖 Gazebo x ∈ [-6.89, 11.00]、y ∈ [-9.87, 8.38] m；包含圆柱半径、周边余量和出生点后的探索矩形为：
+`/fuel/start` 与 RViz 启动共用数据新鲜度、控制状态、起飞高度、悬停速度及规划边界检查。管理器拥有任务批次授权，轨迹在接收和激活时检查连续性；过期、跨任务或未授权指令不能进入控制器。
 
-| 坐标系 | x 范围 / m | y 范围 / m |
-| --- | --- | --- |
-| Gazebo 场景坐标 | [-11, 12] | [-11, 10] |
-| Prometheus/FUEL 局部坐标（默认出生点 -10, 0） | [-1, 22] | [-11, 10] |
+`/fuel/stop` 取消任务并请求悬停。探索完成、低电量及既有探索超时保护会进入返航，默认目标是本地 `[0,0,1]`。人工 `/fuel/return_home` 使用同一路径。返航不设置失败次数或总时间上限：规划失败、交接拒绝或输出超时会进入 `RETURN_RECOVERY`，保留任务批次继续重试；必要时制动，恢复可用轨迹后继续。
 
-探索高度使用局部定位 z ∈ [0.5, 2.5] m。PX4 局部原点在出生点附近，因此当前场景满足 `x_local ≈ x_gazebo + 10`、`y_local ≈ y_gazebo`，有少量估计误差。虽然消息中的坐标系名称都是 `world`，Gazebo 真值与 Prometheus 定位的数值原点不同，不能直接混用。
+只有末段参考执行完成、实际位置和速度收敛、偏航归零且角速度稳定，才进入 `HOME_HOLD`。不会自动降落、解锁、上锁或切换 PX4 模式。参数见 `mission.yaml`，其中返航点、30% 电量阈值及超时需要对应实际使用场景。
 
-`simulation.launch` 中 `spawn_x/spawn_y` 同时控制出生位置和默认边界换算；`box_min/max_*` 参数仍然是局部定位坐标。黄色框表示前沿搜索及轨迹优化范围。桥接节点不再拦截范围外的轨迹指令，运行边界由 FUEL 规划参数负责；启动探索时当前位置仍必须在框内。默认保持原出生点，允许沿入口飞入圆柱区。
-
-原始 `MID360 world cloud` 会显示传感器看到的框外物体，这些点不代表框外探索目标；可关闭该显示项，仅查看框内的 `FUEL occupancy`。调整边界时应使其位于地图分配范围内，例如：
+## 验证
 
 ```bash
-bash fuel_simulation.sh box_min_x:=-1.0 box_max_x:=22.0 \
-  box_min_y:=-11.0 box_max_y:=10.0 max_vel:=1.0 max_acc:=1.0
+bash scripts/test_fuel.sh
 ```
 
-可传入 `uav_id`、`odom_topic`、`cloud_topic`、`lidar_frame`、`map_size_x/y/z`、`box_min/max_x/y/z`、`max_vel`、`max_acc` 和 `rviz`，仿真总启动还支持 `spawn_x/spawn_y`。本工程只支持单机，ROS 话题不添加无人机编号前缀，默认使用 `/mavros/...` 和 `lidar_link`。`uav_id` 仅用于 PX4 实例、MAVLink 编号及端口配置；RViz 的里程计话题按 `odom_topic` 自动重映射。
+测试覆盖外参逆变换、IMU 点云至 MAVROS ENU 转换、真实雷达原点过滤、坐标系与数据时效、控制器状态机、地图边界、探索交接、超时与返航恢复。合成数据用于验证软件接口，不代表实机飞行验收。
 
-`WAIT_TRIGGER` / `wait for trigger` 表示正常等待探索指令。若出现 `FUEL frame mismatch`，日志会同时列出收到与期望的坐标系；用 `rostopic echo -n 1 /livox/lidar/header` 核对。不要仅为消除报错将原始点云标记为 `world`，它仍需经过外参和里程计转换。
-
-在已有 Gazebo/控制器运行时，可只启动 FUEL：
-
-```bash
-src/fuel_bridge/scripts/fuel_env.sh roslaunch prometheus_fuel fuel.launch
-```
-
-`fuel_env.sh` 自动准备可写的 TSP 临时目录，默认 `build/fuel_runtime`，可通过环境变量 `FUEL_TSP_DIR` 覆盖。
-
-## 边界附近反复绕圈
-
-前沿指已知自由空间旁边的未知栅格。本接入已修正 FUEL 的边界判断：只有探索框内的未知邻居才形成前沿，同时排除落在框上界之外的搜索种子。这样，框内已经观测完成后，框外未知区域不会继续产生探索目标；框内的真实未知区域仍然保留。该修复已合入 `third_party/FUEL/fuel_planner/active_perception/src/frontier_finder.cpp`，需要通过 `bash compile_fuel.sh` 编译生效。
-
-框内前沿仍不消失时，应首先检查建图输入：旧 `/livox/lidar` 丢弃了没有碰到物体的射线，开阔处扫过后仍可能保留未知体素。默认已改用 `/livox/lidar_mapping`，并修正观察点可见性中的雷达安装位置。日志后期始终只剩少量前沿、不断出现 `Replan: traj fully executed` 时，单纯调低重规划频率不能消除这类目标。
-
-FUEL 以观测未知区域为目标，不要求机体飞过每个网格。中心如果已经被周围扫描覆盖，可以不进入中心；完整覆盖巡航需要另一种任务目标。仅凭障碍物点云和历史轨迹，不能判断中心的自由空间是否已知。
-
-先使用现有参数验证上述修复。如果仍频繁更换局部目标，再检查终端的 `Replan:` 原因，在 `config/mid360.yaml` 中逐项试调：
-
-| 参数 | 当前有效值 | 适用情况与试调方向 |
-| --- | --- | --- |
-| `frontier/cluster_min` | 30 | 若剩余目标是零散小簇，可先试 50；会忽略部分小型未知区域 |
-| `frontier/min_visib_num` | 10 | 若候选点只能看到少量前沿，可先试 15；会减少可用观察点 |
-| `frontier/min_view_finish_fraction` | 0.2（上游默认） | 若大量出现 `Replan: cluster covered`，可先试 0.4，减少小幅地图变化触发的重规划 |
-| `fsm/thresh_replan3` | 1.5 s（上游默认） | 仅在 `Replan: periodic call` 过于频繁时试 2.5 s；会降低定期更新目标的频率 |
-
-这些是后续对照实验的起点，并未作为新的默认参数。`min_view_finish_fraction` 是触发重规划的前沿变化比例，不是任务完成覆盖率。不要靠扩大探索框或提高速度掩盖问题。若 RViz 规划轨迹正常、实际无人机却绕圈，应检查轨迹跟踪误差，前沿参数不能解决该类问题。
-
-## 持续返航与恢复
-
-探索规划失败后按 `exploration/retry_interval` 持续重试，失败次数仅用于诊断，不再触发自动返航，也不再读取 `exploration/max_plan_failures`。`fsm/replan_time`（默认 0.2 秒）只作为探索的前瞻时间，超过它的成功候选不会被当作规划失败；其开始时间取预定时间与规划完成时间中的较晚者。探索候选仍需通过接收时和实际激活时的位置、速度、加速度连续性检查，控制器确认仍受 `trajectory_handover/timeout` 限制。返航专用的交接截止时间和窗口不足制动只作用于返航。
-
-低电量、首次规划超时、规划状态心跳超时、指令输出超时和人工返航继续生效。持续失败但心跳、旧轨迹输出仍正常时，超时保护未必触发，飞机可能保持末端悬停并继续重试，直到任务恢复、低电量或人工干预。
-
-任务管理器在探索完成、电量低于 30% 或现有探索超时保护触发时，锁定返回本地 ENU `(0, 0, 1)` 的任务。`/fuel/return_home` 可人工触发；`/fuel/stop` 明确取消任务并请求悬停。返航过程中重复启动返航不会创建新批次，电量回升也不会恢复探索。
-
-返航没有失败次数上限，也没有因恢复超时而终止的状态。一次规划失败、轨迹交接被拒绝或输出超时后，任务进入 `RETURN_RECOVERY`，保留原批次与返航目标。旧轨迹仍安全且执行余量充足时，FUEL 按 `return_home/retry_interval` 重试；余量接近规划和交接预算时改用 `urgent_retry_interval`。失败候选不会覆盖执行中的轨迹；碰撞检查覆盖重试和等待交接期间的已执行轨迹。发现旧轨迹不安全或已没有及时接续窗口时立即请求制动，同时继续规划；有效新轨迹获准后退出制动并继续返航。
-
-`return_home/planning_timeout`（默认 10 秒）表示多久没有新返航轨迹接管时重新请求同批次规划，不是整个返航任务的时间上限。桥接因超时关闭转发后，同批次的 `REPLAN` 会恢复接入。人工停止或到家悬停已关闭的任务不会被延迟重试消息重新启动。
-
-`/fuel/mission_status` 中 `RETURN_RECOVERY=5` 是非终止状态；`return_reason` 保留低电量或人工返航等原始原因，`recovery_reason` 描述本次恢复原因，`recovery_attempts` 统计管理器发出的重规划请求。返航只在末段参考完成，实际位置、速度、零偏航和偏航角速度持续达标后进入 `HOME_HOLD`，或由人工停止。地图中暂时没有可行通路时会继续尝试，不会忽略障碍或未知空间强行直飞原点。
-
-`fuel.launch` 的 `odom_twist_in_body` 默认 `true`，对应 MAVROS `/local_position/odom` 的机体系线速度。规划器和轨迹执行器先按姿态旋转到世界 ENU 系，再用于规划、交接和制动；若接入已输出世界系速度的自定义里程计，应显式设为 `false`。控制器仍使用原有的世界系速度输入。
-
-返航中间段和末段共用带硬边界的三次 B 样条优化：前三个控制点由交接处的位置、速度、加速度解析确定并锁定；真正到达 home 的末段再将后三个控制点锁定为 home，从优化内部保证终点速度、加速度为零。每次优化固定 `dt`，外层通过重建边界控制点尝试更长时间配置，保留避障、平滑和动力学代价。距目标约 3.5 m 内优先使用直线初值，失败后改用 A* 初值进入同一流程。偏航以最短角度归零，目标角速度/角加速度上限为 0.6 rad/s、0.8 rad/s²；若初始导数更大则保持交接连续。转向需要更长时间时，在 home 延长静止段，不拉长制动路径。
-
-返航每次规划开始时只确定一个交接时刻 `Ts`，起点状态从旧轨迹在 `Ts` 的状态取得，发布的 `start_time` 也保持为同一个 `Ts`。规划错过期限时丢弃候选并重新选择未来状态；执行器在接收和实际激活时分别检查期限与连续性。候选还需通过速度、加速度极值和已知自由空间检查。有效末段（包括 A* 绕障末段）统一标记为 terminal，不受周期和临近结束重规划触发，碰撞检查继续；跟踪位置误差超过 0.6 m 并持续 0.5 秒，或末段结束 3 秒后实际状态仍未收敛，会请求制动并从反馈状态重新规划。`SETTLING` 心跳表示安全末段仍在执行，避免将正常的减速、转向误判为无新轨迹超时。进入 `HOME_HOLD` 还要求偏航误差不超过 0.08 rad、偏航角速度不超过 0.10 rad/s，且参考轨迹已到达精确终点，因此切换悬停不会再突然修正参考位置或清零非零导数。
-
-探索回归测试：`planner_overrun.test` 缩短前瞻窗口以验证超出规划预算的成功轨迹仍可执行；`exploration_handover.test` 验证延迟接管、连续性检查及确认超时；`exploration_timeouts.test` 验证首次规划、心跳、输出超时和低电量返航仍有效；`bridge.test` 验证失败次数超过三次仍保留探索任务。
-
-新增回归测试：`return_recovery.test` 验证超过三次失败、输出超时、制动后新轨迹接管和人工停止；`return_planner.test` 使用实际 FUEL 和连续有效点云，验证目标被遮挡时至少六次失败后仍规划，并在合成障碍清除后恢复同一返航任务。
-
-## 验证与限制
-
-```bash
-src/fuel_bridge/scripts/fuel_env.sh rostest prometheus_fuel bridge.test
-# 首次运行边界回归测试时，先构建测试可执行文件
-bash compile_fuel.sh fuel_frontier_boundary
-src/fuel_bridge/scripts/fuel_env.sh rostest prometheus_fuel frontier_boundary.test
-src/fuel_bridge/scripts/fuel_env.sh rostest prometheus_fuel planner.test
-```
-
-接口测试使用合成 ROS 消息，验证旋转和平移外参、点过滤、时间戳配对、探索触发门控、轨迹字段与递增命令编号、轨迹中断悬停、边界框几何、越界轨迹转发、低高度与高速度启动、无效数值消息忽略及停止后不再转发。它不等同于 Gazebo/PX4 闭环飞行验收。
-
-边界回归测试使用实际 SDF 地图和前沿搜索器，验证框内全部观测后不再追逐框外未知区域，以及框内未知区域被观测前后前沿的保留与移除；同时验证最大量程射线只清除有限范围自由空间、可见性从雷达安装位置计算。
-
-规划链路测试启动实际 FUEL 算法和轨迹服务器，通过合成起飞扫描数据验证占据地图、前沿、B 样条及 Prometheus 指令输出，并检查前沿 `ADD` Marker 的点不为空、轨迹控制点在探索边界内。本分支已通过完整编译、launch 参数解析及上述 ROS 测试，并通过实际 Gazebo/PX4 短程起飞、探索与停止悬停检查。完整区域覆盖和长期行为尚未验收，详见 [重构记录](../../docs/REFACTOR.md)。
-
-点云或定位超过 0.5 s 未更新、退出指令控制或轨迹中断时会停止探索并请求悬停，初次规划允许 10 s。控制器自身的保护逻辑仍生效。仿真建图话题保留无回波射线，但传感器盲区、遮挡及建图量程之外仍可能存在未知体素。FUEL 的完成状态表示没有可访问的前沿，不保证边界内所有体素都已观测。
-
-上游适配修改涉及 NLopt 查找、并行构建消息依赖、MID360 视场与射线原点、空触发保护、空 Marker 清理、探索边界前沿判断、停止/重新启动，以及移除演示轨迹服务器启动时上下移动的动作。上游完整源码和许可证保留在 `third_party/FUEL`；FUEL 采用 GPL-3.0。
+排查地图不更新时，依次检查点云类型与帧、MAVROS 里程计帧、时间戳和外参；前沿长期不消失时检查是否存在真实未观测区域。真实 MID360 没有测量的方向仍是未知空间，不能通过补造无回波射线来清除。

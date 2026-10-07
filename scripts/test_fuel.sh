@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 fuel_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+python3 "$fuel_root/src/fuel_bridge/test/test_realflight_config.py"
 bash "$fuel_root/compile_fuel.sh" all fuel_frontier_boundary flight_controller_test
 source "$fuel_root/source.sh"
 "$fuel_root/devel/fuel/lib/uav_controller/flight_controller_test"
@@ -12,6 +13,7 @@ mkdir -p "$ROS_LOG_DIR" "$FUEL_TSP_DIR" "$ROS_HOME/test_results/prometheus_fuel"
 rostest uav_controller position_step_ros.test
 rostest prometheus_fuel frontier_boundary.test
 rostest prometheus_fuel bridge.test
+rostest prometheus_fuel realflight_bridge.test
 rostest prometheus_fuel planner.test
 rostest prometheus_fuel planner_overrun.test
 rostest prometheus_fuel exploration_handover.test

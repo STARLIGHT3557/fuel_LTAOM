@@ -6,6 +6,12 @@ namespace fast_planner {
 PerceptionUtils::PerceptionUtils(ros::NodeHandle& nh) {
   nh.param("perception_utils/lidar_360", lidar_360_, false);
   nh.param("perception_utils/lidar_pitch", lidar_pitch_, 0.0);
+  double roll, yaw;
+  nh.param("perception_utils/lidar_roll", roll, 0.0);
+  nh.param("perception_utils/lidar_yaw", yaw, 0.0);
+  lidar_rotation_ = (Eigen::AngleAxisd(yaw, Vector3d::UnitZ()) *
+                     Eigen::AngleAxisd(lidar_pitch_, Vector3d::UnitY()) *
+                     Eigen::AngleAxisd(roll, Vector3d::UnitX())).toRotationMatrix();
   nh.param("perception_utils/lidar_x", lidar_translation_.x(), 0.0);
   nh.param("perception_utils/lidar_y", lidar_translation_.y(), 0.0);
   nh.param("perception_utils/lidar_z", lidar_translation_.z(), 0.0);
@@ -86,8 +92,7 @@ void PerceptionUtils::getFOV(vector<Vector3d>& list1, vector<Vector3d>& list2) {
         Vector3d p1(cos(elev) * cos(a), cos(elev) * sin(a), sin(elev));
         Vector3d p2(cos(elev) * cos(b), cos(elev) * sin(b), sin(elev));
         const Eigen::Matrix3d rotation =
-            (Eigen::AngleAxisd(yaw_, Vector3d::UnitZ()) *
-             Eigen::AngleAxisd(lidar_pitch_, Vector3d::UnitY())).toRotationMatrix();
+            Eigen::AngleAxisd(yaw_, Vector3d::UnitZ()).toRotationMatrix() * lidar_rotation_;
         list1.push_back(sensor_pos_ + vis_dist_ * rotation * p1);
         list2.push_back(sensor_pos_ + vis_dist_ * rotation * p2);
       }
@@ -111,8 +116,7 @@ bool PerceptionUtils::insideFOV(const Vector3d& point) {
 
   if (lidar_360_) {
     // Test elevation in the mounted lidar frame, not the level body frame.
-    dir = Eigen::AngleAxisd(-lidar_pitch_, Vector3d::UnitY()) *
-          (Eigen::AngleAxisd(-yaw_, Vector3d::UnitZ()) * dir);
+    dir = lidar_rotation_.transpose() * (Eigen::AngleAxisd(-yaw_, Vector3d::UnitZ()) * dir);
     double elevation = atan2(dir.z(), hypot(dir.x(), dir.y()));
     return elevation >= lidar_min_elevation_ && elevation <= lidar_max_elevation_;
   }

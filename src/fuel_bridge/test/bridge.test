@@ -8,6 +8,7 @@
     </node>
     <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" required="true">
       <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
+      <rosparam command="load" file="$(find prometheus_fuel)/test/sensor_fixture.yaml"/>
       <param name="box_min_x" value="-1.0"/>
       <param name="box_min_y" value="-11.0"/>
       <param name="box_min_z" value="0.5"/>

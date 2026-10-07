@@ -1,0 +1,11 @@
+lidar_x: 0.1471448904
+lidar_y: 0.0
+lidar_z: 0.2769686356
+lidar_roll: 0.0
+lidar_pitch: 0.35
+lidar_yaw: 0.0
+perception_utils:
+  lidar_x: 0.1471448904
+  lidar_y: 0.0
+  lidar_z: 0.2769686356
+  lidar_pitch: 0.35

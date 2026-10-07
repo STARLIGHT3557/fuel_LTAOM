@@ -121,6 +121,22 @@ TEST_F(FrontierBoundaryTest, VisibilityUsesMountedSensorInsteadOfBodyCenter) {
   EXPECT_TRUE(sensor.insideFOV(Eigen::Vector3d(0, 1, 1.9)));
 }
 
+TEST_F(FrontierBoundaryTest, VisibilityUsesFullMountRotation) {
+  nh_.setParam("perception_utils/lidar_roll", 0.4);
+  nh_.setParam("perception_utils/lidar_pitch", 0.3);
+  nh_.setParam("perception_utils/lidar_yaw", -0.5);
+  nh_.setParam("perception_utils/lidar_min_elevation", -0.1);
+  nh_.setParam("perception_utils/lidar_max_elevation", 0.2);
+  PerceptionUtils sensor(nh_);
+  sensor.setPose(Eigen::Vector3d(0, 0, 1), 0.6);
+  const Eigen::Matrix3d rotation =
+      (Eigen::AngleAxisd(0.6 - 0.5, Eigen::Vector3d::UnitZ()) *
+       Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitY()) *
+       Eigen::AngleAxisd(0.4, Eigen::Vector3d::UnitX())).toRotationMatrix();
+  EXPECT_TRUE(sensor.insideFOV(sensor.getSensorPosition() + rotation * Eigen::Vector3d(1, 0, 0)));
+  EXPECT_FALSE(sensor.insideFOV(sensor.getSensorPosition() + rotation * Eigen::Vector3d(1, 0, 1)));
+}
+
 int main(int argc, char** argv) {
   ros::init(argc, argv, "fuel_frontier_boundary");
   testing::InitGoogleTest(&argc, argv);

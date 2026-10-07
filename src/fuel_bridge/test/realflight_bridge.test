@@ -1,0 +1,13 @@
+<launch>
+  <node pkg="prometheus_fuel" type="fuel_bridge" name="realflight_bridge" ns="realflight_test" required="true">
+    <param name="world_frame" value="map"/>
+    <param name="cloud_frame" value="imu"/>
+    <rosparam param="cloud_translation">[0.3, -0.1, 0.2]</rosparam>
+    <rosparam param="cloud_rotation">[0, 0, 1, 0, 1, 0, -1, 0, 0]</rosparam>
+    <param name="lidar_x" value="0.4"/>
+    <param name="lidar_y" value="-0.1"/>
+    <param name="lidar_z" value="0.2"/>
+    <param name="lidar_pitch" value="1.5707963267948966"/>
+  </node>
+  <test pkg="prometheus_fuel" type="test_realflight_bridge.py" test-name="realflight_cloud_transform" time-limit="25"/>
+</launch>

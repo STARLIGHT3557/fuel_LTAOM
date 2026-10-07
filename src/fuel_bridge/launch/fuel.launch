@@ -1,23 +1,25 @@
 <launch>
-  <arg name="uav_id" default="1"/>
+  <arg name="world_frame" default="world"/>
+  <arg name="sensor_config" default="$(find prometheus_fuel)/config/bridge.yaml"/>
+  <arg name="mission_config" default="$(find prometheus_fuel)/config/mission.yaml"/>
   <arg name="odom_topic" default="/mavros/local_position/odom"/>
   <!-- MAVROS Odometry twist is body-frame; FUEL planning uses world ENU. -->
   <arg name="odom_twist_in_body" default="true"/>
-  <arg name="cloud_topic" default="/livox/lidar_mapping"/>
+  <arg name="cloud_topic" default="/laserMapping/cloud_registered_body"/>
   <arg name="battery_topic" default="/mavros/battery"/>
   <arg name="lidar_frame" default="lidar_link"/>
   <arg name="map_size_x" default="48.0"/>
   <arg name="map_size_y" default="32.0"/>
   <arg name="map_size_z" default="6.0"/>
-  <!-- Local ENU bounds for planning_easy2, spawned at Gazebo (-10, 0). -->
-  <arg name="box_min_x" default="-1.0"/>
-  <arg name="box_min_y" default="-11.0"/>
+  <!-- Local MAVROS ENU mission bounds; set these for the actual flight area. -->
+  <arg name="box_min_x" default="-5.0"/>
+  <arg name="box_min_y" default="-5.0"/>
   <arg name="box_min_z" default="0.5"/>
-  <arg name="box_max_x" default="22.0"/>
-  <arg name="box_max_y" default="10.0"/>
-  <arg name="box_max_z" default="2.5"/>
-  <arg name="max_vel" default="1.0"/>
-  <arg name="max_acc" default="1.0"/>
+  <arg name="box_max_x" default="5.0"/>
+  <arg name="box_max_y" default="5.0"/>
+  <arg name="box_max_z" default="2.0"/>
+  <arg name="max_vel" default="0.5"/>
+  <arg name="max_acc" default="0.5"/>
   <arg name="rviz" default="true"/>
   <include file="$(find exploration_manager)/launch/algorithm.xml">
     <arg name="map_size_x_" value="$(arg map_size_x)"/>
@@ -41,7 +43,10 @@
   </include>
   <!-- Override camera-demo parameters after loading the upstream algorithm. -->
   <rosparam ns="exploration_node" command="load" file="$(find prometheus_fuel)/config/mid360.yaml"/>
-  <rosparam ns="exploration_node" command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+  <rosparam ns="exploration_node" command="load" file="$(arg mission_config)"/>
+  <rosparam ns="exploration_node" command="load" file="$(arg sensor_config)"/>
+  <param name="exploration_node/world_frame" value="$(arg world_frame)"/>
+  <param name="exploration_node/map_ros/frame_id" value="$(arg world_frame)"/>
   <param name="exploration_node/odom_twist_in_body" value="$(arg odom_twist_in_body)"/>
   <param name="exploration_node/exploration/tsp_dir" value="$(env FUEL_TSP_DIR)"/>
   <node pkg="plan_manage" type="traj_server" name="fuel_traj_server" output="screen" required="true">
@@ -51,20 +56,23 @@
     <param name="traj_server/pub_traj_id" value="4"/>
     <param name="fsm/replan_time" value="0.2"/>
     <rosparam command="load" file="$(find prometheus_fuel)/config/mid360.yaml"/>
-    <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+    <rosparam command="load" file="$(arg mission_config)"/>
+    <param name="world_frame" value="$(arg world_frame)"/>
   </node>
   <group ns="fuel">
     <node pkg="prometheus_fuel" type="mission_manager_node" name="mission_manager"
           output="screen" required="true">
-      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+      <rosparam command="load" file="$(arg mission_config)"/>
+      <param name="world_frame" value="$(arg world_frame)"/>
       <remap from="odom" to="$(arg odom_topic)"/>
       <remap from="control_state" to="/uav_controller/fsm_status"/>
       <remap from="battery" to="$(arg battery_topic)"/>
       <remap from="goal" to="/move_base_simple/goal"/>
     </node>
     <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" output="screen" required="true">
-      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+      <rosparam command="load" file="$(arg mission_config)"/>
       <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
+      <rosparam command="load" file="$(arg sensor_config)"/>
       <param name="lidar_frame" value="$(arg lidar_frame)"/>
       <param name="box_min_x" value="$(arg box_min_x)"/>
       <param name="box_min_y" value="$(arg box_min_y)"/>
@@ -72,6 +80,7 @@
       <param name="box_max_x" value="$(arg box_max_x)"/>
       <param name="box_max_y" value="$(arg box_max_y)"/>
       <param name="box_max_z" value="$(arg box_max_z)"/>
+      <param name="world_frame" value="$(arg world_frame)"/>
       <remap from="odom" to="$(arg odom_topic)"/>
       <remap from="cloud" to="$(arg cloud_topic)"/>
       <remap from="control_state" to="/uav_controller/fsm_status"/>
@@ -80,7 +89,7 @@
     </node>
   </group>
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="fuel_rviz"
-        args="-d $(find prometheus_fuel)/config/fuel.rviz">
+        args="-d $(find prometheus_fuel)/config/fuel.rviz -f $(arg world_frame)">
     <remap from="/mavros/local_position/odom" to="$(arg odom_topic)"/>
   </node>
 </launch>

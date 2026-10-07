@@ -16,11 +16,11 @@ frontier:
   min_visib_num: 10
 perception_utils:
   lidar_360: true
-  # Match the sensor mounting pitch in bridge.yaml and p600_mid360.sdf.jinja.
-  lidar_pitch: 0.35
-  lidar_x: 0.1471448904
+  # Overridden from the same FAST-LIO extrinsics as the cloud bridge.
+  lidar_pitch: 0.0
+  lidar_x: 0.0
   lidar_y: 0.0
-  lidar_z: 0.2769686356
+  lidar_z: 0.0
   lidar_min_elevation: -0.122173
   lidar_max_elevation: 0.925025
   max_dist: 10.0

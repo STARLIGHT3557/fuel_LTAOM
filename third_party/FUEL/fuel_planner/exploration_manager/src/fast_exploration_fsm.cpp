@@ -16,6 +16,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh) {
   fp_.reset(new FSMParam);
   fd_.reset(new FSMData);
 
+  nh.param<std::string>("world_frame", world_frame_, "world");
   nh.param("odom_twist_in_body", odom_twist_in_body_, false);
   /*  Fsm param  */
   nh.param("fsm/thresh_replan1", fp_->replan_thresh1_, -1.0);
@@ -538,7 +539,7 @@ bool FastExplorationFSM::validContext(
 void FastExplorationFSM::publishPlannerStatus(uint8_t state, const string& detail) {
   uav_mission_msgs::PlannerStatus status;
   status.header.stamp = ros::Time::now();
-  status.header.frame_id = "world";
+  status.header.frame_id = world_frame_;
   status.context = context_;
   status.trajectory_id = state == uav_mission_msgs::PlannerStatus::TRAJECTORY_UNSAFE && executing_traj_
       ? executing_traj_->traj_id_ : (planner_manager_->local_data_.traj_id_ > 0
