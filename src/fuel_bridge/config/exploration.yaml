@@ -1,12 +1,12 @@
+# FUEL mapping and exploration settings for MID360 point clouds.
+# Frames come from fuel.launch; mounting extrinsics come from sensor_config.
 sdf_map:
   resolution: 0.2
   obstacles_inflation: 0.4
   max_ray_length: 10.0
   ground_height: -1.0
   virtual_ceil_height: 3.5
-  local_map_margin: 20
 map_ros:
-  frame_id: world
   visualization_truncate_height: 3.5
   visualization_truncate_low: 0.0
   show_all_map: true
@@ -16,19 +16,7 @@ frontier:
   min_visib_num: 10
 perception_utils:
   lidar_360: true
-  # Overridden from the same FAST-LIO extrinsics as the cloud bridge.
-  lidar_pitch: 0.0
-  lidar_x: 0.0
-  lidar_y: 0.0
-  lidar_z: 0.0
   lidar_min_elevation: -0.122173
-  lidar_max_elevation: 0.925025
+  lidar_max_elevation: 0.907571
   max_dist: 10.0
   vis_dist: 2.0
-  top_angle: 0.56125
-  left_angle: 0.69222
-  right_angle: 0.68901
-manager:
-  clearance_threshold: 0.5
-search:
-  margin: 0.4

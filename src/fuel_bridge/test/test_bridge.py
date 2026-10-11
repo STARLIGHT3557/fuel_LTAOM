@@ -15,7 +15,7 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from uav_controller.msg import FlightStatus, TrajectorySetpoint
-from uav_mission_msgs.msg import ControllerAck, MissionStatus, TaskContext, PlannerStatus
+from uav_mission_msgs.msg import MissionStatus, TaskContext, PlannerStatus, TrajectoryStatus
 from visualization_msgs.msg import Marker
 
 
@@ -44,7 +44,7 @@ class BridgeTest(unittest.TestCase):
         state_pub = rospy.Publisher('/fuel/control_state', FlightStatus, queue_size=2)
         battery_pub = rospy.Publisher('/fuel/battery', BatteryState, queue_size=2)
         cmd_pub = rospy.Publisher('/fuel/position_cmd', PositionCommand, queue_size=2)
-        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=2)
+        trajectory_pub = rospy.Publisher('/fuel/trajectory_status', TrajectoryStatus, queue_size=2)
         planner_pub = rospy.Publisher('/fuel/planner_status', PlannerStatus, queue_size=2)
         goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
         for service in ('/fuel/start', '/fuel/stop', '/fuel/return_home'):
@@ -176,16 +176,16 @@ class BridgeTest(unittest.TestCase):
         self.wait_for(lambda: any(item.context == returning and not item.finished for item in commands),
                       message='return command did not cross the bridge')
         deadline = time.monotonic() + 5.0
-        while ack_pub.get_num_connections() == 0 and time.monotonic() < deadline:
+        while trajectory_pub.get_num_connections() == 0 and time.monotonic() < deadline:
             feed()
-        self.assertGreater(ack_pub.get_num_connections(), 0)
-        ack = ControllerAck(context=returning, trajectory_id=1, accepted=True)
+        self.assertGreater(trajectory_pub.get_num_connections(), 0)
+        active = TrajectoryStatus(context=returning, trajectory_id=1, state=TrajectoryStatus.ACTIVE)
         for _ in range(3):
-            ack.header.stamp = rospy.Time.now()
-            ack_pub.publish(ack)
+            active.header.stamp = rospy.Time.now()
+            trajectory_pub.publish(active)
             feed()
         self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
-                      message='controller acknowledgement did not enter RETURNING')
+                      message='executor activation did not enter RETURNING')
         for _ in range(12):
             feed(x=0.0, y=0.0, z=1.0, yaw=0.0)
         self.assertNotEqual(statuses[-1].state, MissionStatus.HOME_HOLD,

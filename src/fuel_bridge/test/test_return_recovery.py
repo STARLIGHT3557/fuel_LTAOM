@@ -69,7 +69,7 @@ class ReturnRecoveryTest(unittest.TestCase):
         try:
             rospy.wait_for_service('/fuel/return_home', timeout=10)
             self.wait_for(lambda: planner_pub.get_num_connections() >= 2 and
-                          ack_pub.get_num_connections() >= 2 and statuses and statuses[-1].battery_valid,
+                          ack_pub.get_num_connections() >= 1 and statuses and statuses[-1].battery_valid,
                           'test publishers were not connected')
             time.sleep(0.2)
             return_home = rospy.ServiceProxy('/fuel/return_home', Trigger)

@@ -4,6 +4,8 @@
       <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
       <param name="return_home/stable_time" value="0.2"/>
       <param name="battery/data_timeout" value="1.0"/>
+      <!-- This test exercises the 30% boundary independently of flight tuning. -->
+      <param name="battery/return_threshold" value="0.30"/>
       <remap from="goal" to="/move_base_simple/goal"/>
     </node>
     <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" required="true">

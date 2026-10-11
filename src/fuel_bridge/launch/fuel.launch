@@ -42,7 +42,7 @@
     <arg name="fx" value="387.0"/><arg name="fy" value="387.0"/>
   </include>
   <!-- Override camera-demo parameters after loading the upstream algorithm. -->
-  <rosparam ns="exploration_node" command="load" file="$(find prometheus_fuel)/config/mid360.yaml"/>
+  <rosparam ns="exploration_node" command="load" file="$(find prometheus_fuel)/config/exploration.yaml"/>
   <rosparam ns="exploration_node" command="load" file="$(arg mission_config)"/>
   <rosparam ns="exploration_node" command="load" file="$(arg sensor_config)"/>
   <param name="exploration_node/world_frame" value="$(arg world_frame)"/>
@@ -55,7 +55,6 @@
     <param name="odom_twist_in_body" value="$(arg odom_twist_in_body)"/>
     <param name="traj_server/pub_traj_id" value="4"/>
     <param name="fsm/replan_time" value="0.2"/>
-    <rosparam command="load" file="$(find prometheus_fuel)/config/mid360.yaml"/>
     <rosparam command="load" file="$(arg mission_config)"/>
     <param name="world_frame" value="$(arg world_frame)"/>
   </node>

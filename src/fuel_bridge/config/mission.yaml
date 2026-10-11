@@ -1,5 +1,4 @@
 home_position: [0.0, 0.0, 1.0]
-world_frame: world
 source_id: fuel_planner
 data_timeout: 0.5
 
@@ -9,7 +8,7 @@ battery:
   data_timeout: 3.0
 
 exploration:
-  finish_confirm_cycles: 3
+  finish_confirm_cycles: 10
   # Planning failures retry without a count limit; battery and timeout returns remain active.
   retry_interval: 1.0
   initial_plan_timeout: 10.0
@@ -25,6 +24,7 @@ return_home:
   # Reserved after planning for transport, controller acknowledgement and the
   # activation-time continuity recheck at the single scheduled switch time.
   handover_margin: 0.1
+  # Deadline for the first executor ACTIVE event; not a limit on return duration.
   planning_timeout: 10.0
   position_tolerance: 0.20
   speed_tolerance: 0.15

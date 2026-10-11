@@ -51,6 +51,7 @@ bash start_realflight.sh
 - RViz、探索范围、速度和加速度：`src/fuel_bridge/launch/realflight.launch`。
 - 控制器参数：`src/fuel_bridge/config/uav_controller_realflight.yaml`。
 - 任务和返航参数：`src/fuel_bridge/config/mission.yaml`。
+- FUEL 建图、前沿筛选和雷达视场参数：`src/fuel_bridge/config/exploration.yaml`。
 - 雷达网络与定位外参：`src/realflight_modules/faster-lio` 内对应的 JSON / YAML。
 
 当前最大速度为 `0.5 m/s`、最大加速度为 `0.2 m/s²`，控制器悬停推力参数为 `0.40`。
@@ -74,7 +75,7 @@ rosservice call /fuel/stop "{}"          # 取消任务并请求悬停
 rosservice call /fuel/return_home "{}"   # 人工请求规划返航
 ```
 
-默认任务管理器在探索完成、有效电量低于 30% 或探索超时保护触发时规划返航，在本地 `[0,0,1]` m 悬停；不会自动降落或上锁。返航目标和电量阈值在 `src/fuel_bridge/config/mission.yaml`，也可通过 `mission_config:=/路径/任务参数.yaml` 覆盖。固定原点必须对应实际希望返回的位置。
+默认任务管理器在探索完成、有效电量低于 20% 或探索超时保护触发时规划返航，在本地 `[0,0,1]` m 悬停；不会自动降落或上锁。返航目标和电量阈值在 `src/fuel_bridge/config/mission.yaml`，也可通过 `mission_config:=/路径/任务参数.yaml` 覆盖。固定原点必须对应实际希望返回的位置。
 
 PX4 的外部定位融合和 OFFBOARD 丢失后的行为由已有飞控配置负责，版本说明见 [PX4 1.14 外部定位](https://docs.px4.io/v1.14/en/ros/external_position_estimation) 与 [OFFBOARD](https://docs.px4.io/v1.14/en/flight_modes/offboard)。
 

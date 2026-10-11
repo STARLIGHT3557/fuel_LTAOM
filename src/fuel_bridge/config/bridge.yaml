@@ -1,14 +1,6 @@
-world_frame: world
-lidar_frame: lidar_link
-# Generic LiDAR-local input. realflight.launch loads generated FAST-LIO
-# IMU-to-body and LiDAR-to-body extrinsics on top of this configuration.
-lidar_x: 0.0
-lidar_y: 0.0
-lidar_z: 0.0
-lidar_roll: 0.0
-lidar_pitch: 0.0
-lidar_yaw: 0.0
-min_range: 0.6
+# Frames are set by fuel.launch; real-flight extrinsics are generated from
+# the Faster-LIO configuration by prepare_realflight.py (sensor_config).
+min_range: 0.6   #删除距离雷达原点小于 0.6 m 的点
 data_timeout: 0.5
 command_timeout: 0.5
 planning_timeout: 10.0

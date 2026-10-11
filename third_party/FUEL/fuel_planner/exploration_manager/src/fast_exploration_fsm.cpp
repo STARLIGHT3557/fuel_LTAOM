@@ -274,7 +274,7 @@ void FastExplorationFSM::scheduleRetry(const ros::Time& now, const string& reaso
     return;
   }
 
-  if (return_home_ && hasSafeActiveTrajectory(now) && !fd_->static_state_) {
+  if (hasSafeActiveTrajectory(now) && !fd_->static_state_) {
     const double remaining = activeTrajectoryRemaining(now);
     const double lead = fp_->replan_time_ + handover_margin_;
     const double available_wait = remaining - lead;

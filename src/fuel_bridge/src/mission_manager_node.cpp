@@ -11,7 +11,6 @@
 #include <sensor_msgs/BatteryState.h>
 #include <std_srvs/Trigger.h>
 #include <uav_controller/FlightStatus.h>
-#include <uav_mission_msgs/ControllerAck.h>
 #include <uav_mission_msgs/MissionCommand.h>
 #include <uav_mission_msgs/MissionStatus.h>
 #include <uav_mission_msgs/PlannerStatus.h>
@@ -80,7 +79,6 @@ class MissionManager {
     battery_sub_ = nh_.subscribe("battery", 10, &MissionManager::batteryCallback, this);
     planner_sub_ = nh_.subscribe("planner_status", 20, &MissionManager::plannerCallback, this);
     trajectory_sub_ = nh_.subscribe("trajectory_status", 20, &MissionManager::trajectoryCallback, this);
-    controller_sub_ = nh_.subscribe("controller_ack", 20, &MissionManager::controllerCallback, this);
     goal_sub_ = nh_.subscribe("goal", 1, &MissionManager::goalCallback, this);
 
     start_srv_ = nh_.advertiseService("start", &MissionManager::start, this);
@@ -123,10 +121,9 @@ class MissionManager {
     recovery_reason_ = uav_mission_msgs::MissionStatus::REASON_NONE;
     replan_requested_ = false;
     last_replan_request_ = ros::Time();
-    last_return_execution_ = ros::Time();
     reference_settled_ = false;
     settled_stamp_ = ros::Time();
-    last_accepted_trajectory_ = 0;
+    last_active_trajectory_ = 0;
     stable_since_ = ros::Time();
     publishAuthorization();
   }
@@ -185,7 +182,6 @@ class MissionManager {
   }
 
   void recoverReturn(uint8_t reason, const std::string& detail, bool request_replan) {
-    if (!returning()) return;
     state_ = uav_mission_msgs::MissionStatus::RETURN_RECOVERY;
     recovery_reason_ = reason;
     replan_requested_ = replan_requested_ || request_replan;
@@ -281,13 +277,10 @@ class MissionManager {
     if (!sameContext(msg->context, context_)) return;
     planner_stamp_ = ros::Time::now();
     if (returning()) {
-      reference_settled_ = msg->state == uav_mission_msgs::PlannerStatus::GOAL_REACHED &&
-                           msg->trajectory_id == last_accepted_trajectory_;
+      reference_settled_ = last_active_trajectory_ != 0 &&
+                           msg->state == uav_mission_msgs::PlannerStatus::GOAL_REACHED &&
+                           msg->trajectory_id == last_active_trajectory_;
       if (reference_settled_) settled_stamp_ = planner_stamp_;
-      if (msg->trajectory_id == last_accepted_trajectory_ &&
-          (reference_settled_ || msg->state == uav_mission_msgs::PlannerStatus::SETTLING)) {
-        last_return_execution_ = planner_stamp_;
-      }
     }
     if (msg->state == uav_mission_msgs::PlannerStatus::TRAJECTORY_READY) {
       explore_trajectory_ready_ = true;
@@ -323,24 +316,18 @@ class MissionManager {
         msg->state == uav_mission_msgs::TrajectoryStatus::REJECTED) {
       recoverReturn(uav_mission_msgs::MissionStatus::UNSAFE_TRAJECTORY,
                     msg->detail, true);
-    } else if (msg->state == uav_mission_msgs::TrajectoryStatus::ACTIVE) {
-      last_return_execution_ = ros::Time::now();
+    } else if (msg->state == uav_mission_msgs::TrajectoryStatus::ACTIVE &&
+               msg->trajectory_id > last_active_trajectory_) {
+      // Only the executor's actual activation advances the mission. Controller
+      // ACKs still belong to the executor/controller handover protocol.
+      last_active_trajectory_ = msg->trajectory_id;
+      reference_settled_ = false;
+      settled_stamp_ = ros::Time();
+      stable_since_ = ros::Time();
       state_ = uav_mission_msgs::MissionStatus::RETURNING;
       replan_requested_ = false;
       recovery_reason_ = uav_mission_msgs::MissionStatus::REASON_NONE;
       publishStatus("return trajectory is executing");
-    }
-  }
-
-  void controllerCallback(const uav_mission_msgs::ControllerAckConstPtr& msg) {
-    if (!sameContext(msg->context, context_) || !msg->accepted || msg->trajectory_id == 0) return;
-    if (returning() && msg->trajectory_id > last_accepted_trajectory_) {
-      last_accepted_trajectory_ = msg->trajectory_id;
-      last_return_execution_ = ros::Time::now();
-      state_ = uav_mission_msgs::MissionStatus::RETURNING;
-      replan_requested_ = false;
-      recovery_reason_ = uav_mission_msgs::MissionStatus::REASON_NONE;
-      publishStatus("controller accepted return trajectory");
     }
   }
 
@@ -381,13 +368,18 @@ class MissionManager {
       }
     }
     if (returning()) {
-      const ros::Time progress = last_return_execution_.isZero() ? task_started_
-                                                               : last_return_execution_;
-      if ((!planner_stamp_.isZero() && !fresh(planner_stamp_, planner_status_timeout_)) ||
-          (!progress.isZero() && now >= progress &&
-           (now - progress).toSec() >= return_planning_timeout_)) {
+      // The planning deadline ends at the first ACTIVE event, even if a later
+      // failure enters recovery. Heartbeat/output watchdogs cover execution.
+      const bool initial_return_timeout = last_active_trajectory_ == 0 &&
+          !task_started_.isZero() && now >= task_started_ &&
+          (now - task_started_).toSec() >= return_planning_timeout_;
+      const ros::Time heartbeat = planner_stamp_.isZero() ? task_started_ : planner_stamp_;
+      const bool heartbeat_timeout = (last_active_trajectory_ != 0 || !planner_stamp_.isZero()) &&
+          !fresh(heartbeat, planner_status_timeout_);
+      if (initial_return_timeout || heartbeat_timeout) {
         recoverReturn(uav_mission_msgs::MissionStatus::TRAJECTORY_TIMEOUT,
-                      "return progress timed out; requesting another same-batch attempt", true);
+                      initial_return_timeout ? "first return trajectory activation timed out"
+                                             : "return planner status heartbeat timed out", true);
       }
       if (atHome()) {
         if (stable_since_.isZero()) stable_since_ = now;
@@ -417,7 +409,7 @@ class MissionManager {
   ros::NodeHandle nh_, pnh_;
   ros::Publisher command_pub_, authorization_pub_, status_pub_;
   ros::Subscriber odom_sub_, control_sub_, battery_sub_, planner_sub_, trajectory_sub_,
-      controller_sub_, goal_sub_;
+      goal_sub_;
   ros::ServiceServer start_srv_, stop_srv_, return_srv_;
   ros::Timer timer_;
   nav_msgs::Odometry odom_;
@@ -429,8 +421,8 @@ class MissionManager {
   double battery_threshold_{0.30}, battery_timeout_{2.0}, initial_plan_timeout_{10.0};
   double planner_status_timeout_{4.0};
   double return_retry_interval_{1.0}, return_planning_timeout_{10.0};
-  ros::Time last_replan_request_, last_return_execution_;
-  uint64_t last_accepted_trajectory_{0};
+  ros::Time last_replan_request_;
+  uint64_t last_active_trajectory_{0};
   uint32_t recovery_attempts_{0};
   uint8_t recovery_reason_{uav_mission_msgs::MissionStatus::REASON_NONE};
   bool replan_requested_{false};

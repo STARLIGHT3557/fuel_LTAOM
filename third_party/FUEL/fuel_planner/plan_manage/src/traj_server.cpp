@@ -149,7 +149,7 @@ bool continuousWithExecution(TrajectorySlot& candidate, const ros::Time& switch_
 }
 
 bool parseSpline(const bspline::Bspline& msg, TrajectorySlot& slot) {
-  if (!validContext(msg.context) || msg.traj_id <= 0 || msg.order < 1 ||
+  if (!validContext(msg.context) || msg.order < 1 ||
       msg.pos_pts.size() <= static_cast<size_t>(msg.order) || msg.knots.empty() ||
       msg.yaw_pts.size() < 4 || !std::isfinite(msg.yaw_dt) || msg.yaw_dt <= 0.0 ||
       msg.start_time.isZero()) return false;

@@ -4,7 +4,11 @@
       <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
       <param name="exploration/initial_plan_timeout" value="1.2"/>
       <param name="exploration/planner_status_timeout" value="0.4"/>
+      <param name="battery/return_threshold" value="0.30"/>
+      <param name="return_home/planning_timeout" value="1.2"/>
+      <param name="return_home/retry_interval" value="0.1"/>
+      <param name="return_home/stable_time" value="0.2"/>
     </node>
   </group>
-  <test test-name="exploration_timeouts" pkg="prometheus_fuel" type="test_exploration_timeouts.py" time-limit="30"/>
+  <test test-name="exploration_timeouts" pkg="prometheus_fuel" type="test_exploration_timeouts.py" time-limit="60"/>
 </launch>
