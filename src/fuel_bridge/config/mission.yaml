@@ -1,6 +1,8 @@
 home_position: [0.0, 0.0, 1.0]
 source_id: fuel_planner
 data_timeout: 0.5
+# Console summary interval (seconds); task/reason changes are logged immediately.
+status_log_period: 2.0
 
 battery:
   enabled: true

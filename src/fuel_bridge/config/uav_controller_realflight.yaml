@@ -20,5 +20,5 @@ state_timeout: 2.0
 timestamp_future_tolerance: 0.1 # 允许消息源时间戳最多超前本机时间 100 ms。
 setpoint_topic: /uav_controller/trajectory_setpoint
 
-print_tracking: true
+print_tracking: false # Mission manager prints the flight/battery summary.
 print_period_ms: 500

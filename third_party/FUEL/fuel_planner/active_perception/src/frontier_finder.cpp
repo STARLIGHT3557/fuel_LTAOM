@@ -69,7 +69,7 @@ void FrontierFinder::searchFrontiers() {
     iter = frontiers.erase(iter);
   };
 
-  std::cout << "Before remove: " << frontiers_.size() << std::endl;
+  ROS_DEBUG_STREAM("Before remove: " << frontiers_.size());
 
   removed_ids_.clear();
   int rmv_idx = 0;
@@ -83,7 +83,7 @@ void FrontierFinder::searchFrontiers() {
       ++iter;
     }
   }
-  std::cout << "After remove: " << frontiers_.size() << std::endl;
+  ROS_DEBUG_STREAM("After remove: " << frontiers_.size());
   for (auto iter = dormant_frontiers_.begin(); iter != dormant_frontiers_.end();) {
     if (haveOverlap(iter->box_min_, iter->box_max_, update_min, update_max) &&
         isFrontierChanged(*iter))
@@ -119,7 +119,7 @@ void FrontierFinder::searchFrontiers() {
       }
   splitLargeFrontiers(tmp_frontiers_);
 
-  ROS_WARN_THROTTLE(5.0, "Frontier t: %lf", (ros::Time::now() - t1).toSec());
+  ROS_DEBUG_THROTTLE(5.0, "Frontier t: %lf", (ros::Time::now() - t1).toSec());
 }
 
 void FrontierFinder::expandFrontier(
@@ -213,8 +213,8 @@ bool FrontierFinder::splitHorizontally(const Frontier& frontier, list<Frontier>&
     }
   }
   Eigen::Vector2d first_pc = vectors.col(max_idx);
-  std::cout << "max idx: " << max_idx << std::endl;
-  std::cout << "mean: " << mean.transpose() << ", first pc: " << first_pc.transpose() << std::endl;
+  ROS_DEBUG_STREAM("max idx: " << max_idx);
+  ROS_DEBUG_STREAM("mean: " << mean.transpose() << ", first pc: " << first_pc.transpose());
 
   // Split the frontier into two groups along the first PC
   Frontier ftr1, ftr2;
@@ -260,12 +260,12 @@ bool FrontierFinder::isInBoxes(
 }
 
 void FrontierFinder::updateFrontierCostMatrix() {
-  std::cout << "cost mat size before remove: " << std::endl;
+  ROS_DEBUG_STREAM("cost mat size before remove: ");
   for (auto ftr : frontiers_)
-    std::cout << "(" << ftr.costs_.size() << "," << ftr.paths_.size() << "), ";
-  std::cout << "" << std::endl;
+    ROS_DEBUG_STREAM("(" << ftr.costs_.size() << "," << ftr.paths_.size() << "), ");
+  ROS_DEBUG_STREAM("");
 
-  std::cout << "cost mat size remove: " << std::endl;
+  ROS_DEBUG_STREAM("cost mat size remove: ");
   if (!removed_ids_.empty()) {
     // Delete path and cost for removed clusters
     for (auto it = frontiers_.begin(); it != first_new_ftr_; ++it) {
@@ -282,14 +282,14 @@ void FrontierFinder::updateFrontierCostMatrix() {
         cost_iter = it->costs_.erase(cost_iter);
         path_iter = it->paths_.erase(path_iter);
       }
-      std::cout << "(" << it->costs_.size() << "," << it->paths_.size() << "), ";
+      ROS_DEBUG_STREAM("(" << it->costs_.size() << "," << it->paths_.size() << "), ");
     }
     removed_ids_.clear();
   }
-  std::cout << "" << std::endl;
+  ROS_DEBUG_STREAM("");
 
   auto updateCost = [](const list<Frontier>::iterator& it1, const list<Frontier>::iterator& it2) {
-    std::cout << "(" << it1->id_ << "," << it2->id_ << "), ";
+    ROS_DEBUG_STREAM("(" << it1->id_ << "," << it2->id_ << "), ");
     // Search path from old cluster's top viewpoint to new cluster'
     Viewpoint& vui = it1->viewpoints_.front();
     Viewpoint& vuj = it2->viewpoints_.front();
@@ -304,7 +304,7 @@ void FrontierFinder::updateFrontierCostMatrix() {
     it2->paths_.push_back(path_ij);
   };
 
-  std::cout << "cost mat add: " << std::endl;
+  ROS_DEBUG_STREAM("cost mat add: ");
   // Compute path and cost between old and new clusters
   for (auto it1 = frontiers_.begin(); it1 != first_new_ftr_; ++it1)
     for (auto it2 = first_new_ftr_; it2 != frontiers_.end(); ++it2)
@@ -314,17 +314,17 @@ void FrontierFinder::updateFrontierCostMatrix() {
   for (auto it1 = first_new_ftr_; it1 != frontiers_.end(); ++it1)
     for (auto it2 = it1; it2 != frontiers_.end(); ++it2) {
       if (it1 == it2) {
-        std::cout << "(" << it1->id_ << "," << it2->id_ << "), ";
+        ROS_DEBUG_STREAM("(" << it1->id_ << "," << it2->id_ << "), ");
         it1->costs_.push_back(0);
         it1->paths_.push_back({});
       } else
         updateCost(it1, it2);
     }
-  std::cout << "" << std::endl;
-  std::cout << "cost mat size final: " << std::endl;
+  ROS_DEBUG_STREAM("");
+  ROS_DEBUG_STREAM("cost mat size final: ");
   for (auto ftr : frontiers_)
-    std::cout << "(" << ftr.costs_.size() << "," << ftr.paths_.size() << "), ";
-  std::cout << "" << std::endl;
+    ROS_DEBUG_STREAM("(" << ftr.costs_.size() << "," << ftr.paths_.size() << "), ");
+  ROS_DEBUG_STREAM("");
 }
 
 void FrontierFinder::mergeFrontiers(Frontier& ftr1, const Frontier& ftr2) {
@@ -417,11 +417,10 @@ void FrontierFinder::computeFrontiersToVisit() {
   int idx = 0;
   for (auto& ft : frontiers_) {
     ft.id_ = idx++;
-    std::cout << ft.id_ << ", ";
+    ROS_DEBUG_STREAM(ft.id_ << ", ");
   }
-  std::cout << "\nnew num: " << new_num << ", new dormant: " << new_dormant_num << std::endl;
-  std::cout << "to visit: " << frontiers_.size() << ", dormant: " << dormant_frontiers_.size()
-            << std::endl;
+  ROS_DEBUG_STREAM("\nnew num: " << new_num << ", new dormant: " << new_dormant_num);
+  ROS_DEBUG_STREAM("to visit: " << frontiers_.size() << ", dormant: " << dormant_frontiers_.size());
 }
 
 void FrontierFinder::getTopViewpointsInfo(

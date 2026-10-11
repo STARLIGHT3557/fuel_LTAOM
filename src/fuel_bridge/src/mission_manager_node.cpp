@@ -1,6 +1,8 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -27,6 +29,36 @@ bool sameContext(const uav_mission_msgs::TaskContext& a,
 bool finitePoint(const geometry_msgs::Point& p) {
   return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
 }
+
+const char* missionStateName(uint8_t state) {
+  using Status = uav_mission_msgs::MissionStatus;
+  switch (state) {
+    case Status::READY: return "等待任务";
+    case Status::EXPLORING: return "探索中";
+    case Status::PREPARE_RETURN: return "准备返航";
+    case Status::RETURNING: return "返航中";
+    case Status::HOME_HOLD: return "已到家悬停";
+    case Status::RETURN_RECOVERY: return "返航恢复/重试";
+    default: return "未知状态";
+  }
+}
+
+const char* missionReasonName(uint8_t reason) {
+  using Status = uav_mission_msgs::MissionStatus;
+  switch (reason) {
+    case Status::REASON_NONE: return "无";
+    case Status::EXPLORATION_DONE: return "探索完成";
+    case Status::LOW_BATTERY: return "低电量";
+    case Status::EXPLORE_PLAN_FAILED: return "探索规划失败";
+    case Status::EXPLORE_PLAN_TIMEOUT: return "首次探索规划超时";
+    case Status::TRAJECTORY_TIMEOUT: return "轨迹输出/规划心跳超时";
+    case Status::MANUAL_RETURN: return "人工返航";
+    case Status::STOP_REQUESTED: return "人工停止";
+    case Status::RETURN_PLAN_FAILED: return "返航规划失败";
+    case Status::UNSAFE_TRAJECTORY: return "轨迹不安全/被拒绝";
+    default: return "未知原因";
+  }
+}
 }  // namespace
 
 class MissionManager {
@@ -52,6 +84,7 @@ class MissionManager {
     pnh_.param("return_home/speed_tolerance", speed_tolerance_, 0.15);
     pnh_.param("return_home/stable_time", stable_time_, 1.5);
     pnh_.param("data_timeout", data_timeout_, 0.5);
+    pnh_.param("status_log_period", status_log_period_, 2.0);
     pnh_.param<std::string>("world_frame", world_frame_, "world");
     pnh_.param<std::string>("source_id", source_id_, "fuel_planner");
     if (!(battery_threshold_ >= 0.0 && battery_threshold_ <= 1.0) ||
@@ -61,7 +94,8 @@ class MissionManager {
         !std::isfinite(return_planning_timeout_) || return_retry_interval_ <= 0.0 ||
         return_planning_timeout_ <= 0.0 ||
         position_tolerance_ <= 0.0 || speed_tolerance_ <= 0.0 || stable_time_ <= 0.0 ||
-        data_timeout_ <= 0.0 || source_id_.empty()) {
+        data_timeout_ <= 0.0 || !std::isfinite(status_log_period_) ||
+        status_log_period_ <= 0.0 || source_id_.empty()) {
       throw std::invalid_argument("invalid mission manager parameters");
     }
 
@@ -157,6 +191,42 @@ class MissionManager {
     msg.mission_done = state_ == uav_mission_msgs::MissionStatus::HOME_HOLD;
     msg.detail = detail_;
     status_pub_.publish(msg);
+    logFlightStatus(msg);
+  }
+
+  void logFlightStatus(const uav_mission_msgs::MissionStatus& status) {
+    const ros::Time now = status.header.stamp;
+    const bool control_fresh = fresh(control_stamp_, data_timeout_);
+    const std::string phase = control_fresh ? control_.phase : "无数据/过期";
+    const std::string policy = control_fresh ? control_.output_policy : "无数据/过期";
+    const std::string landing = control_fresh ? control_.landing_state : "无数据/过期";
+    std::ostringstream key;
+    key << unsigned(status.state) << '/' << unsigned(status.return_reason) << '/'
+        << unsigned(status.recovery_reason) << '/' << status.context.mission_id << '/'
+        << phase << '/' << policy << '/' << landing << '/' << (control_fresh && control_.feedback_ready)
+        << '/' << status.battery_valid;
+    const bool changed = key.str() != last_log_key_;
+    if (!changed && !last_log_.isZero() && now >= last_log_ &&
+        (now - last_log_).toSec() < status_log_period_) return;
+
+    std::ostringstream battery;
+    if (status.battery_valid)
+      battery << std::fixed << std::setprecision(1) << 100.0 * status.battery_percentage << '%';
+    else
+      battery << "未知/无效/过期";
+    ROS_INFO_STREAM("[飞行状态] 任务=" << missionStateName(status.state)
+        << " | 控制=" << phase << '/' << policy
+        << " | 着陆状态=" << landing
+        << " | 反馈=" << (control_fresh && control_.feedback_ready ? "就绪" : "未就绪")
+        << " | 电量=" << battery.str()
+        << " | 低电返航=" << (battery_enabled_ ? "启用" : "关闭")
+        << "(阈值=" << 100.0 * battery_threshold_ << "%)"
+        << " | 任务原因=" << missionReasonName(status.return_reason)
+        << " | 恢复原因=" << missionReasonName(status.recovery_reason)
+        << " | 恢复请求次数=" << status.recovery_attempts
+        << " | 详情=" << status.detail);
+    last_log_key_ = key.str();
+    last_log_ = now;
   }
 
   void beginReturn(uint8_t reason, const std::string& detail) {
@@ -418,6 +488,9 @@ class MissionManager {
   geometry_msgs::Point home_;
   ros::Time control_stamp_, battery_stamp_, task_started_, planner_stamp_, stable_since_, last_status_;
   std::string world_frame_, source_id_, detail_{"ready"};
+  std::string last_log_key_;
+  ros::Time last_log_;
+  double status_log_period_{2.0};
   double battery_threshold_{0.30}, battery_timeout_{2.0}, initial_plan_timeout_{10.0};
   double planner_status_timeout_{4.0};
   double return_retry_interval_{1.0}, return_planning_timeout_{10.0};

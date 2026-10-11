@@ -88,7 +88,7 @@ void FastExplorationFSM::init(ros::NodeHandle& nh) {
 }
 
 void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
-  ROS_INFO_STREAM_THROTTLE(1.0, "[FSM]: state: " << fd_->state_str_[int(state_)]);
+  ROS_DEBUG_STREAM_THROTTLE(1.0, "[FSM]: state: " << fd_->state_str_[int(state_)]);
 
   switch (state_) {
     case INIT: {
@@ -104,12 +104,12 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
 
     case WAIT_TRIGGER: {
       // Do nothing but wait for trigger
-      ROS_WARN_THROTTLE(1.0, "wait for trigger.");
+      ROS_DEBUG_THROTTLE(1.0, "wait for trigger.");
       break;
     }
 
     case FINISH: {
-      ROS_INFO_THROTTLE(1.0, "finish exploration.");
+      ROS_DEBUG_THROTTLE(1.0, "finish exploration.");
       break;
     }
 
@@ -222,21 +222,21 @@ void FastExplorationFSM::FSMCallback(const ros::TimerEvent& e) {
       double time_to_end = info->duration_ - t_cur;
       if (time_to_end < fp_->replan_thresh1_) {
         transitState(PLAN_TRAJ, "FSM");
-        ROS_WARN("Replan: traj fully executed=================================");
+        ROS_DEBUG("Replan: traj fully executed=================================");
         return;
       }
       // Replan if next frontier to be visited is covered
       if (!return_home_ && t_cur > fp_->replan_thresh2_ &&
           expl_manager_->frontier_finder_->isFrontierCovered()) {
         transitState(PLAN_TRAJ, "FSM");
-        ROS_WARN("Replan: cluster covered=====================================");
+        ROS_DEBUG("Replan: cluster covered=====================================");
         return;
       }
       // Replan after some time
       const double periodic_threshold = return_home_ ? return_replan_period_ : fp_->replan_thresh3_;
       if (t_cur > periodic_threshold && !classic_) {
         transitState(PLAN_TRAJ, "FSM");
-        ROS_WARN("Replan: periodic call=======================================");
+        ROS_DEBUG("Replan: periodic call=======================================");
       }
       break;
     }
@@ -722,7 +722,6 @@ void FastExplorationFSM::odometryCallback(const nav_msgs::OdometryConstPtr& msg)
 void FastExplorationFSM::transitState(EXPL_STATE new_state, string pos_call) {
   int pre_s = int(state_);
   state_ = new_state;
-  cout << "[" + pos_call + "]: from " + fd_->state_str_[pre_s] + " to " + fd_->state_str_[int(new_state)]
-       << endl;
+  ROS_DEBUG_STREAM("[" + pos_call + "]: from " + fd_->state_str_[pre_s] + " to " + fd_->state_str_[int(new_state)]);
 }
 }  // namespace fast_planner

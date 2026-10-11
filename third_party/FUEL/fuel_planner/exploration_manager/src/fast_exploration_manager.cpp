@@ -91,8 +91,8 @@ int FastExplorationManager::planExploreMotion(
   ed_->views_.clear();
   ed_->global_tour_.clear();
 
-  std::cout << "start pos: " << pos.transpose() << ", vel: " << vel.transpose()
-            << ", acc: " << acc.transpose() << std::endl;
+  ROS_DEBUG_STREAM("start pos: " << pos.transpose() << ", vel: " << vel.transpose()
+            << ", acc: " << acc.transpose());
 
   // Search frontiers and group them into clusters
   frontier_finder_->searchFrontiers();
@@ -107,7 +107,7 @@ int FastExplorationManager::planExploreMotion(
   frontier_finder_->getDormantFrontiers(ed_->dead_frontiers_);
 
   if (ed_->frontiers_.empty()) {
-    ROS_WARN("No coverable frontier.");
+    ROS_DEBUG("No coverable frontier.");
     return NO_FRONTIER;
   }
   frontier_finder_->getTopViewpointsInfo(pos, ed_->points_, ed_->yaws_, ed_->averages_);
@@ -116,7 +116,7 @@ int FastExplorationManager::planExploreMotion(
         ed_->points_[i] + 2.0 * Vector3d(cos(ed_->yaws_[i]), sin(ed_->yaws_[i]), 0));
 
   double view_time = (ros::Time::now() - t1).toSec();
-  ROS_WARN(
+  ROS_DEBUG(
       "Frontier: %d, t: %lf, viewpoint: %d, t: %lf", ed_->frontiers_.size(), frontier_time,
       ed_->points_.size(), view_time);
 
@@ -174,7 +174,7 @@ int FastExplorationManager::planExploreMotion(
         ed_->refined_views2_.insert(ed_->refined_views2_.end(), v2.begin(), v2.end());
       }
       double local_time = (ros::Time::now() - t1).toSec();
-      ROS_WARN("Local refine time: %lf", local_time);
+      ROS_DEBUG("Local refine time: %lf", local_time);
 
     } else {
       // Choose the next viewpoint from global tour
@@ -220,7 +220,7 @@ int FastExplorationManager::planExploreMotion(
   } else
     ROS_ERROR("Empty destination.");
 
-  std::cout << "Next view: " << next_pos.transpose() << ", " << next_yaw << std::endl;
+  ROS_DEBUG_STREAM("Next view: " << next_pos.transpose() << ", " << next_yaw);
   return planToGoal(pos, vel, acc, yaw, next_pos, next_yaw);
 
 }
@@ -504,7 +504,7 @@ void FastExplorationManager::findGlobalTour(
   frontier_finder_->getPathForTour(cur_pos, indices, ed_->global_tour_);
 
   double tsp_time = (ros::Time::now() - t1).toSec();
-  ROS_WARN("Cost mat: %lf, TSP: %lf", mat_time, tsp_time);
+  ROS_DEBUG("Cost mat: %lf, TSP: %lf", mat_time, tsp_time);
 }
 
 void FastExplorationManager::refineLocalTour(
@@ -526,7 +526,7 @@ void FastExplorationManager::refineLocalTour(
   ViewNode::Ptr final_node;
 
   // Add viewpoints
-  std::cout << "Local tour graph: ";
+  ROS_DEBUG_STREAM("Local tour graph: ");
   for (int i = 0; i < n_points.size(); ++i) {
     // Create nodes for viewpoints of one frontier
     for (int j = 0; j < n_points[i].size(); ++j) {
@@ -544,11 +544,11 @@ void FastExplorationManager::refineLocalTour(
       }
     }
     // Store nodes for this group for connecting edges
-    std::cout << cur_group.size() << ", ";
+    ROS_DEBUG_STREAM(cur_group.size() << ", ");
     last_group = cur_group;
     cur_group.clear();
   }
-  std::cout << "" << std::endl;
+  ROS_DEBUG_STREAM("");
   create_time = (ros::Time::now() - t1).toSec();
   t1 = ros::Time::now();
 
