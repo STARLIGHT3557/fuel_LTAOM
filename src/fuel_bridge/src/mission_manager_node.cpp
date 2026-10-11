@@ -33,30 +33,30 @@ bool finitePoint(const geometry_msgs::Point& p) {
 const char* missionStateName(uint8_t state) {
   using Status = uav_mission_msgs::MissionStatus;
   switch (state) {
-    case Status::READY: return "等待任务";
-    case Status::EXPLORING: return "探索中";
-    case Status::PREPARE_RETURN: return "准备返航";
-    case Status::RETURNING: return "返航中";
-    case Status::HOME_HOLD: return "已到家悬停";
-    case Status::RETURN_RECOVERY: return "返航恢复/重试";
-    default: return "未知状态";
+    case Status::READY: return "READY";
+    case Status::EXPLORING: return "EXPLORING";
+    case Status::PREPARE_RETURN: return "PREPARE_RETURN";
+    case Status::RETURNING: return "RETURNING";
+    case Status::HOME_HOLD: return "HOME_HOLD";
+    case Status::RETURN_RECOVERY: return "RETURN_RECOVERY";
+    default: return "UNKNOWN";
   }
 }
 
 const char* missionReasonName(uint8_t reason) {
   using Status = uav_mission_msgs::MissionStatus;
   switch (reason) {
-    case Status::REASON_NONE: return "无";
-    case Status::EXPLORATION_DONE: return "探索完成";
-    case Status::LOW_BATTERY: return "低电量";
-    case Status::EXPLORE_PLAN_FAILED: return "探索规划失败";
-    case Status::EXPLORE_PLAN_TIMEOUT: return "首次探索规划超时";
-    case Status::TRAJECTORY_TIMEOUT: return "轨迹输出/规划心跳超时";
-    case Status::MANUAL_RETURN: return "人工返航";
-    case Status::STOP_REQUESTED: return "人工停止";
-    case Status::RETURN_PLAN_FAILED: return "返航规划失败";
-    case Status::UNSAFE_TRAJECTORY: return "轨迹不安全/被拒绝";
-    default: return "未知原因";
+    case Status::REASON_NONE: return "NONE";
+    case Status::EXPLORATION_DONE: return "EXPLORATION_DONE";
+    case Status::LOW_BATTERY: return "LOW_BATTERY";
+    case Status::EXPLORE_PLAN_FAILED: return "EXPLORE_PLAN_FAILED";
+    case Status::EXPLORE_PLAN_TIMEOUT: return "EXPLORE_PLAN_TIMEOUT";
+    case Status::TRAJECTORY_TIMEOUT: return "TRAJECTORY_TIMEOUT";
+    case Status::MANUAL_RETURN: return "MANUAL_RETURN";
+    case Status::STOP_REQUESTED: return "STOP_REQUESTED";
+    case Status::RETURN_PLAN_FAILED: return "RETURN_PLAN_FAILED";
+    case Status::UNSAFE_TRAJECTORY: return "UNSAFE_TRAJECTORY";
+    default: return "UNKNOWN";
   }
 }
 }  // namespace
@@ -197,9 +197,9 @@ class MissionManager {
   void logFlightStatus(const uav_mission_msgs::MissionStatus& status) {
     const ros::Time now = status.header.stamp;
     const bool control_fresh = fresh(control_stamp_, data_timeout_);
-    const std::string phase = control_fresh ? control_.phase : "无数据/过期";
-    const std::string policy = control_fresh ? control_.output_policy : "无数据/过期";
-    const std::string landing = control_fresh ? control_.landing_state : "无数据/过期";
+    const std::string phase = control_fresh ? control_.phase : "NO_DATA_OR_STALE";
+    const std::string policy = control_fresh ? control_.output_policy : "NO_DATA_OR_STALE";
+    const std::string landing = control_fresh ? control_.landing_state : "NO_DATA_OR_STALE";
     std::ostringstream key;
     key << unsigned(status.state) << '/' << unsigned(status.return_reason) << '/'
         << unsigned(status.recovery_reason) << '/' << status.context.mission_id << '/'
@@ -213,18 +213,18 @@ class MissionManager {
     if (status.battery_valid)
       battery << std::fixed << std::setprecision(1) << 100.0 * status.battery_percentage << '%';
     else
-      battery << "未知/无效/过期";
-    ROS_INFO_STREAM("[飞行状态] 任务=" << missionStateName(status.state)
-        << " | 控制=" << phase << '/' << policy
-        << " | 着陆状态=" << landing
-        << " | 反馈=" << (control_fresh && control_.feedback_ready ? "就绪" : "未就绪")
-        << " | 电量=" << battery.str()
-        << " | 低电返航=" << (battery_enabled_ ? "启用" : "关闭")
-        << "(阈值=" << 100.0 * battery_threshold_ << "%)"
-        << " | 任务原因=" << missionReasonName(status.return_reason)
-        << " | 恢复原因=" << missionReasonName(status.recovery_reason)
-        << " | 恢复请求次数=" << status.recovery_attempts
-        << " | 详情=" << status.detail);
+      battery << "UNKNOWN_INVALID_OR_STALE";
+    ROS_INFO_STREAM("[FLIGHT_STATUS] mission=" << missionStateName(status.state)
+        << " | control=" << phase << '/' << policy
+        << " | landing=" << landing
+        << " | feedback=" << (control_fresh && control_.feedback_ready ? "READY" : "NOT_READY")
+        << " | battery=" << battery.str()
+        << " | low_battery_return=" << (battery_enabled_ ? "ON" : "OFF")
+        << "(threshold=" << 100.0 * battery_threshold_ << "%)"
+        << " | task_reason=" << missionReasonName(status.return_reason)
+        << " | recovery_reason=" << missionReasonName(status.recovery_reason)
+        << " | recovery_requests=" << status.recovery_attempts
+        << " | detail=" << status.detail);
     last_log_key_ = key.str();
     last_log_ = now;
   }
