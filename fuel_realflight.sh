@@ -2,7 +2,7 @@
 set -eo pipefail
 fuel_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$fuel_root/source.sh"
-fuel_lio_config="${FAST_LIO_CONFIG:-${FAST_LIO_ROOT:-$HOME/fast_lio}/faster-lio/config/mid360.yaml}"
+fuel_lio_config="${FAST_LIO_CONFIG:-${FAST_LIO_ROOT:-$fuel_root/src/realflight_modules/faster-lio}/faster-lio/config/mid360.yaml}"
 fuel_launch_args=()
 for fuel_arg in "$@"; do
   case "$fuel_arg" in

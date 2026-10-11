@@ -16,9 +16,9 @@ FUEL 规划源码包含在 `third_party/FUEL/fuel_planner/`，不需要下载 PX
 
 ## 接入机载定位
 
-先按机载端现有配置启动串口 MAVROS、MID360／FAST-LIO，以及将定位送入 PX4 的 EKF／位姿转发节点。本工程复用这些节点；不要重复启动。
+`start_realflight.sh` 统一启动串口 MAVROS、MID360／Faster-LIO、EKF／位姿转发和 FUEL。单独调试 FUEL 时，`fuel_realflight.sh` 继续复用已有定位节点。
 
-已核对 `/home/ubuntu/fast_lio` 中 Faster-LIO 的接口：
+已集成本工程 `src/realflight_modules/faster-lio` 中的 MID360 驱动、Faster-LIO 和 EKF，接口如下：
 
 | 输入 | 默认话题 | 用途 |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ FUEL 规划源码包含在 `third_party/FUEL/fuel_planner/`，不需要下载 PX
 | 飞控状态 | `/mavros/state`、`/mavros/extended_state` | 连接、解锁、模式及着陆状态 |
 | 电量 | `/mavros/battery` | 任务管理器的低电量返航 |
 
-启动脚本读取 `~/fast_lio/faster-lio/config/mid360.yaml`，根据 `mapping/imu_body_R/T` 和 `mapping/extrinsic_R/T` 生成统一外参，同时供点云转换和规划器视场检查使用。默认点云帧为 `imu`，输出帧为 MAVROS 默认的 `map`。若机载 MAVROS 使用其他局部帧，传入对应的 `world_frame`，不要通过改点云标签混用坐标系。
+启动脚本读取 `src/realflight_modules/faster-lio/faster-lio/config/mid360.yaml`，根据 `mapping/imu_body_R/T` 和 `mapping/extrinsic_R/T` 生成统一外参，同时供点云转换和规划器视场检查使用。默认点云帧为 `imu`，输出帧为 MAVROS 默认的 `map`。若机载 MAVROS 使用其他局部帧，传入对应的 `world_frame`，不要通过改点云标签混用坐标系。
 
 **现有 FAST-LIO 配置注明 `imu_body_T` 尚未标定。** 应将实际机体原点在 LIO IMU 系中的位置填回机载定位配置；下次启动本工程会重新读取。本工程不会修改外部定位或 MAVROS 文件。
 
@@ -39,23 +39,22 @@ FAST-LIO 必须启用 `publish/scan_publish_en`、`publish/scan_bodyframe_pub_en
 在工程根目录执行：
 
 ```bash
-bash fuel_realflight.sh
+bash start_realflight.sh
 ```
 
-可覆盖定位配置、控制器参数、坐标系及规划边界：
+脚本依次调用原有 MAVROS、MID360／Faster-LIO、EKF 的 launch，以及原有 `fuel_realflight.sh`；按 Ctrl+C 统一停止本脚本启动的进程。参数沿用各模块原有 launch。FUEL 的 RViz 默认开启，无图形环境时执行 `bash start_realflight.sh rviz:=false`。
+启动前接通雷达网线，电脑网口配置为 `192.168.1.50/24`，雷达地址为 `192.168.1.199`。
 
-```bash
-bash fuel_realflight.sh \
-  lio_config:=/home/ubuntu/fast_lio/faster-lio/config/mid360.yaml \
-  controller_params:=/你的路径/已标定控制器参数.yaml \
-  world_frame:=map rviz:=false \
-  box_min_x:=-5 box_max_x:=5 box_min_y:=-5 box_max_y:=5 \
-  box_min_z:=0.5 box_max_z:=2.0 max_vel:=0.5 max_acc:=0.5
-```
+维护时直接修改对应配置：
 
-默认探索框为局部 x/y `[-5,5]` m、z `[0.5,2]` m，地图分配为 `20×20×6` m，速度和加速度上限为 `0.5 m/s`、`0.5 m/s²`。这些是初始配置，必须按实际场地设置。RViz 可通过 `rviz:=false` 关闭。
+- 飞控串口：MAVROS 原有 `/opt/ros/noetic/share/mavros/launch/px4.launch`，当前为 `/dev/ttyTHS0:921600`。
+- RViz、探索范围、速度和加速度：`src/fuel_bridge/launch/realflight.launch`。
+- 控制器参数：`src/fuel_bridge/config/uav_controller_realflight.yaml`。
+- 任务和返航参数：`src/fuel_bridge/config/mission.yaml`。
+- 雷达网络与定位外参：`src/realflight_modules/faster-lio` 内对应的 JSON / YAML。
 
-`config/uav_controller_realflight.yaml` 延续原控制参数，其中增益和 `hover_percentage: 0.258` **尚未在这架实机验证**。使用机载端已标定参数时传 `controller_params`；启动入口始终启用 FUEL 的 `direct_trajectory` 模式。配置不自动写入 PX4 参数。
+当前最大速度为 `0.5 m/s`、最大加速度为 `0.2 m/s²`，控制器悬停推力参数为 `0.40`。
+单独调试 FUEL 时仍可使用 `fuel_realflight.sh`，它复用已运行的 MAVROS、定位和 EKF。
 
 ## 开始、停止与返航
 
@@ -80,3 +79,5 @@ rosservice call /fuel/return_home "{}"   # 人工请求规划返航
 PX4 的外部定位融合和 OFFBOARD 丢失后的行为由已有飞控配置负责，版本说明见 [PX4 1.14 外部定位](https://docs.px4.io/v1.14/en/ros/external_position_estimation) 与 [OFFBOARD](https://docs.px4.io/v1.14/en/flight_modes/offboard)。
 
 接口、转换细节与测试见 [FUEL 桥接说明](src/fuel_bridge/README.md)，本次检查结果见 [软件验证记录](docs/REALFLIGHT_VALIDATION.md)。
+
+MID360 驱动、定位与 EKF 的统一编译和启动方法见 [Faster-LIO 集成说明](docs/FASTER_LIO_INTEGRATION.md)。复制目录不包含独立 Git 仓库。

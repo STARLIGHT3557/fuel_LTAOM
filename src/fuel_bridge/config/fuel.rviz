@@ -53,11 +53,11 @@ Visualization Manager:
       Name: Exploration area
       Enabled: true
       Marker Topic: /fuel/exploration_bounds
-    - Class: rviz/Odometry
-      Name: UAV odometry
+    - Class: rviz/MarkerArray
+      Name: UAV model
       Enabled: true
-      Topic: /mavros/local_position/odom
-      Keep: 1
+      Marker Topic: /fuel/uav_model
+      Queue Size: 2
   Tools:
     - Class: rviz/Interact
     - Class: rviz/MoveCamera

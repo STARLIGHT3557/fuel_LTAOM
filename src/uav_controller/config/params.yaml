@@ -2,13 +2,13 @@
 # 坐标系采用 ENU/FLU，与 MAVROS 的 local_position 和 setpoint_raw 话题一致。
 
 k_pos:
-  x: 3.0
-  y: 3.0
-  z: 4.0
+  x: 4.0
+  y: 4.0
+  z: 6.0
 k_vel:
   x: 3.0
   y: 3.0
-  z: 3.5
+  z: 4.0
 
 hover_percentage: 0.70
 estimate_thrust: true

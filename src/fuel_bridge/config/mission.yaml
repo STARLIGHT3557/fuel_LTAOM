@@ -5,8 +5,8 @@ data_timeout: 0.5
 
 battery:
   enabled: true
-  return_threshold: 0.30
-  data_timeout: 2.0
+  return_threshold: 0.20
+  data_timeout: 3.0
 
 exploration:
   finish_confirm_cycles: 3

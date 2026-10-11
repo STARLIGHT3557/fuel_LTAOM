@@ -19,6 +19,7 @@
 #include <quadrotor_msgs/PositionCommand.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 namespace {
 bool sameContext(const uav_mission_msgs::TaskContext& a,
@@ -37,6 +38,7 @@ class FuelBridge {
   std::unique_ptr<message_filters::Synchronizer<SyncPolicy>> sync_;
   ros::Subscriber odom_sub_, state_sub_, command_sub_, mission_sub_, authorization_sub_;
   ros::Publisher cloud_pub_, hits_pub_, pose_pub_, command_pub_, trigger_pub_, bounds_pub_, planner_status_pub_;
+  ros::Publisher model_pub_;
   ros::Timer watchdog_;
   nav_msgs::Odometry odom_;
   uav_controller::FlightStatus state_;
@@ -59,6 +61,70 @@ class FuelBridge {
   bool fresh(const ros::Time& stamp, double timeout) const {
     const double age = (ros::Time::now() - stamp).toSec();
     return !stamp.isZero() && age >= -0.05 && age < timeout;
+  }
+
+  void publishModel(const nav_msgs::Odometry& odom) const {
+    if (model_pub_.getNumSubscribers() == 0 || !fresh(odom.header.stamp, 0.5)) return;
+    const auto& pose = odom.pose.pose;
+    const Eigen::Vector3d position(pose.position.x, pose.position.y, pose.position.z);
+    Eigen::Quaterniond attitude(pose.orientation.w, pose.orientation.x,
+                                pose.orientation.y, pose.orientation.z);
+    if (!position.allFinite() || !attitude.coeffs().allFinite() ||
+        !std::isfinite(attitude.norm()) || attitude.norm() < 1e-6) return;
+    attitude.normalize();
+
+    using Marker = visualization_msgs::Marker;
+    visualization_msgs::MarkerArray model;
+    model.markers.reserve(12);
+    // Body coordinates: X forward, Y left, Z up. Dimensions are in metres.
+    const double motor_offset = 0.17;
+    const double diagonal = std::atan2(1.0, 1.0);
+    const Eigen::Vector3d grey(0.32, 0.36, 0.42);
+    const Eigen::Vector3d orange(1.0, 0.45, 0.05);
+    const Eigen::Vector3d blue(0.12, 0.55, 1.0);
+    auto part = [&](int type, const Eigen::Vector3d& offset,
+                    const Eigen::Vector3d& size, double yaw,
+                    const Eigen::Vector3d& colour, double alpha) {
+      Marker marker;
+      marker.header = odom.header;
+      marker.ns = "uav_model";
+      marker.id = static_cast<int>(model.markers.size());
+      marker.type = type;
+      marker.action = Marker::ADD;
+      const Eigen::Vector3d centre = position + attitude * offset;
+      const Eigen::Quaterniond rotation =
+          attitude * Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ());
+      marker.pose.position.x = centre.x();
+      marker.pose.position.y = centre.y();
+      marker.pose.position.z = centre.z();
+      marker.pose.orientation.w = rotation.w();
+      marker.pose.orientation.x = rotation.x();
+      marker.pose.orientation.y = rotation.y();
+      marker.pose.orientation.z = rotation.z();
+      marker.scale.x = size.x();
+      marker.scale.y = size.y();
+      marker.scale.z = size.z();
+      marker.color.r = colour.x();
+      marker.color.g = colour.y();
+      marker.color.b = colour.z();
+      marker.color.a = alpha;
+      marker.lifetime = ros::Duration(0.5);
+      model.markers.push_back(marker);
+    };
+
+    part(Marker::CUBE, {0, 0, 0}, {0.22, 0.14, 0.06}, 0, grey, 1);
+    part(Marker::CUBE, {0.10, 0, 0}, {0.055, 0.14, 0.062}, 0, orange, 1);
+    const double arm_length = 2 * std::sqrt(2.0) * motor_offset;
+    for (double yaw : {diagonal, -diagonal})
+      part(Marker::CUBE, {0, 0, 0}, {arm_length, 0.025, 0.025}, yaw, grey, 1);
+    for (double x : {motor_offset, -motor_offset}) {
+      for (double y : {motor_offset, -motor_offset}) {
+        part(Marker::CYLINDER, {x, y, 0.015}, {0.045, 0.045, 0.035}, 0, grey, 1);
+        part(Marker::CYLINDER, {x, y, 0.038}, {0.18, 0.18, 0.006}, 0,
+             x > 0 ? orange : blue, 0.65);
+      }
+    }
+    model_pub_.publish(model);
   }
 
   bool ready() const {
@@ -357,6 +423,7 @@ public:
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_world", 2);
     hits_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_hits_world", 2);
     pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("sensor_pose", 2);
+    model_pub_ = nh_.advertise<visualization_msgs::MarkerArray>("uav_model", 1);
     command_pub_ = nh_.advertise<uav_controller::TrajectorySetpoint>("command", 10);
     trigger_pub_ = nh_.advertise<nav_msgs::Path>("trigger", 1);
     planner_status_pub_ = nh_.advertise<uav_mission_msgs::PlannerStatus>("planner_status", 10);
@@ -367,7 +434,10 @@ public:
     sync_->registerCallback(boost::bind(&FuelBridge::cloudCallback, this, _1, _2));
     odom_sub_ = nh_.subscribe<nav_msgs::Odometry>("odom", 10,
         [this](const nav_msgs::OdometryConstPtr& msg) {
-          if (msg->header.frame_id == world_frame_) odom_ = *msg;
+          if (msg->header.frame_id == world_frame_) {
+            odom_ = *msg;
+            publishModel(*msg);
+          }
         });
     state_sub_ = nh_.subscribe<uav_controller::FlightStatus>("control_state", 10,
         [this](const uav_controller::FlightStatusConstPtr& msg) {

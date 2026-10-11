@@ -1,0 +1,22 @@
+# Translation NOT CALIBRATED for this aircraft.
+# tr_i is output-body origin in flight-controller IMU coordinates.
+# Match launch imu_trans_* to the same vector when body and IMU axes align.
+Rr_i:       [1, 0, 0, 0]     #ekf bag     #[1, 0, 0, 0] #car   #quaterniod(w,x,y,z)  
+# tr_i:       [0.0, 0.0, 0.1] #ekf bag     #[0, 0, 0.]   #cars
+tr_i:       [0.0, 0.0, 0.0] #ekf bag     #[0, 0, 0.]   #cars
+
+# for /mavros/imu/data_raw: m/s^2, scale = 1
+# scale_g:    1.00
+
+# Livox 加速度单位为 g；当前 EKF 重力常数使用 9.8       rui
+scale_g: 9.8
+# rotation form imu to virtual body
+# rotation_imu:  [ 1, 0, 0,
+#                  0, 1, 0,
+#                  0, 0, 1]
+
+rotation_imu: [
+    0.9659258263, 0,  0.2588190451,
+    0,            1,  0,
+   -0.2588190451, 0,  0.9659258263
+]

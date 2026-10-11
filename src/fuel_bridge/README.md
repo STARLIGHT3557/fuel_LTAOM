@@ -57,9 +57,9 @@ I 为 LIO 使用的 IMU 系，B 为飞机 FLU，L 为 LiDAR，W 为 MAVROS 局�
 
 `world_frame` 必须与 MAVROS 里程计的 `header.frame_id` 一致，实机入口默认 `map`；所有建图、轨迹、任务状态和可视化使用同一坐标系。`odom_twist_in_body` 默认 `true`，将 MAVROS 的机体系里程计线速度转成规划所需世界系速度。控制器继续使用 `/mavros/local_position/velocity_local`。
 
-`source.sh` 保留已有工作空间叠加环境。默认定位配置路径为 `~/fast_lio/faster-lio/config/mid360.yaml`；可通过 `lio_config:=...` 或 `FAST_LIO_CONFIG` 指定，`FAST_LIO_ROOT` 可改变默认根目录。生成外参及 TSP 临时文件默认放在 `build/fuel_runtime`，可用 `FUEL_TSP_DIR` 覆盖。
+`source.sh` 保留已有工作空间叠加环境。默认定位配置路径为 `src/realflight_modules/faster-lio/faster-lio/config/mid360.yaml`；可通过 `lio_config:=...` 或 `FAST_LIO_CONFIG` 指定，`FAST_LIO_ROOT` 可改变默认根目录。生成外参及 TSP 临时文件默认放在 `build/fuel_runtime`，可用 `FUEL_TSP_DIR` 覆盖。
 
-仅启动规划器的 `fuel.launch` 不启动控制器，直接使用时必须传入正确的 `sensor_config`、`world_frame`、点云和定位话题；机载完整入口为 `fuel_realflight.sh`。
+仅启动规划器的 `fuel.launch` 不启动控制器，直接使用时必须传入正确的 `sensor_config`、`world_frame`、点云和定位话题；仅 FUEL 入口为 `fuel_realflight.sh`，完整机载入口为 `start_realflight.sh`。
 
 ## 任务行为
 
@@ -78,3 +78,11 @@ bash scripts/test_fuel.sh
 测试覆盖外参逆变换、IMU 点云至 MAVROS ENU 转换、真实雷达原点过滤、坐标系与数据时效、控制器状态机、地图边界、探索交接、超时与返航恢复。合成数据用于验证软件接口，不代表实机飞行验收。
 
 排查地图不更新时，依次检查点云类型与帧、MAVROS 里程计帧、时间戳和外参；前沿长期不消失时检查是否存在真实未观测区域。真实 MID360 没有测量的方向仍是未知空间，不能通过补造无回波射线来清除。
+
+完整机载系统入口为工程根目录 `start_realflight.sh`，统一启动 MAVROS、MID360／Faster-LIO、EKF、控制器和 FUEL；详见 [根目录说明](../../README.md#启动)。
+
+## RViz 无人机模型
+
+FUEL 的 RViz 使用简易四旋翼模型显示无人机，橙色为机头、蓝色为机尾。模型由 bridge 根据现有里程计发布到 /fuel/uav_model，跟随位置和完整姿态；定位数据停止更新后，模型在 0.5 秒内消失。
+
+外形尺寸在 src/fuel_bridge.cpp 的 publishModel() 中集中定义，目前旋翼外缘跨度约 0.52 米。原有启动方式不变。

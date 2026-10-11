@@ -9,15 +9,15 @@ fsm:
   position_step: false
 
 k_pos:
-  x: 9.0
-  y: 9.0
-  z: 12.0
+  x: 4.0
+  y: 4.0
+  z: 6.0
 k_vel:
-  x: 6.0
-  y: 6.0
-  z: 8.0
+  x: 3.0
+  y: 3.0
+  z: 4.0
 
-hover_percentage: 0.258
+hover_percentage: 0.40
 estimate_thrust: true
 hover_suggest: true
 hover_stable_tol: 0.005
@@ -28,7 +28,7 @@ gravity: 9.81
 control_rate_hz: 100.0
 feedback_timeout: 0.5
 state_timeout: 2.0
-timestamp_future_tolerance: 0.05 # 允许消息源时间戳最多超前本机时间 50 ms。
+timestamp_future_tolerance: 0.1 # 允许消息源时间戳最多超前本机时间 50 ms。
 setpoint_topic: /uav_controller/trajectory_setpoint
 
 print_tracking: true
