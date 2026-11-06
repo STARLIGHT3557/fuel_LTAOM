@@ -2,7 +2,54 @@
 #include "plan_env/map_ros.h"
 #include <plan_env/raycast.h>
 
+#include <cerrno>
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <fstream>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 namespace fast_planner {
+
+namespace {
+
+// Persisted grid format. The magic/version guard against loading a foreign or
+// truncated file, and the recorded geometry must match the live map exactly:
+// a grid from a different size/resolution/origin would be reused at wrong
+// coordinates, which looks like "unknown obstacles" during flight.
+const char kGridMagic[8] = {'L', 'T', 'A', 'O', 'M', 'G', 'R', 'D'};
+const int kGridVersion = 1;
+
+// mkdir -p without pulling in boost::filesystem or std::filesystem (the
+// package is built as C++14).
+void ensureDirectory(const std::string& path) {
+  std::string current;
+  current.reserve(path.size());
+  for (size_t i = 0; i <= path.size(); ++i) {
+    if (i == path.size() || path[i] == '/') {
+      if (!current.empty() && current != ".") {
+        if (mkdir(current.c_str(), 0755) != 0 && errno != EEXIST) {
+          ROS_WARN("SDFMap: cannot create directory %s (%s)", current.c_str(),
+                   strerror(errno));
+          return;
+        }
+      }
+      if (i == path.size()) break;
+      current.push_back('/');
+    } else {
+      current.push_back(path[i]);
+    }
+  }
+}
+
+std::string parentDirectory(const std::string& path) {
+  const size_t slash = path.find_last_of('/');
+  if (slash == std::string::npos) return std::string();
+  return path.substr(0, slash);
+}
+
+}  // namespace
 SDFMap::SDFMap() {
 }
 
@@ -361,7 +408,7 @@ SDFMap::closetPointInMap(const Eigen::Vector3d& pt, const Eigen::Vector3d& camer
   return camera_pt + (min_t - 1e-3) * diff;
 }
 
-void SDFMap::clearAndInflateLocalMap() {
+void SDFMap::clearAndInflateLocalMap(bool apply_ceiling) {
   // /*clear outside local*/
   // const int vec_margin = 5;
 
@@ -461,7 +508,11 @@ void SDFMap::clearAndInflateLocalMap() {
       }
 
   // add virtual ceiling to limit flight height
-  if (mp_->virtual_ceil_height_ > -0.5) {
+  // Skipped when only the inflated grid is being rebuilt from a restored map:
+  // the saved occupancy buffer already carries the ceiling where the previous
+  // flight observed it, and stamping it over the whole map would mark the
+  // ceiling of never-visited columns as occupied.
+  if (apply_ceiling && mp_->virtual_ceil_height_ > -0.5) {
     int ceil_id = floor((mp_->virtual_ceil_height_ - mp_->map_origin_(2)) * mp_->resolution_inv_);
     for (int x = md_->local_bound_min_(0); x <= md_->local_bound_max_(0); ++x)
       for (int y = md_->local_bound_min_(1); y <= md_->local_bound_max_(1); ++y) {
@@ -533,6 +584,196 @@ double SDFMap::getDistWithGrad(const Eigen::Vector3d& pos, Eigen::Vector3d& grad
   grad[0] *= mp_->resolution_inv_;
 
   return dist;
+}
+
+int SDFMap::knownVoxelCount() const {
+  int known = 0, occupied = 0;
+  voxelStats(known, occupied);
+  return known;
+}
+
+void SDFMap::voxelStats(int& known, int& occupied) const {
+  known = 0;
+  occupied = 0;
+  const double unknown = mp_->clamp_min_log_ - mp_->unknown_flag_;
+  for (size_t i = 0; i < md_->occupancy_buffer_.size(); ++i) {
+    const double occ = md_->occupancy_buffer_[i];
+    if (occ <= unknown + 1e-6) continue;
+    ++known;
+    if (occ > mp_->min_occupancy_log_) ++occupied;
+  }
+}
+
+void SDFMap::resetMap() {
+  const double unknown = mp_->clamp_min_log_ - mp_->unknown_flag_;
+  std::fill(md_->occupancy_buffer_.begin(), md_->occupancy_buffer_.end(), unknown);
+  std::fill(md_->occupancy_buffer_inflate_.begin(), md_->occupancy_buffer_inflate_.end(), 0);
+  std::fill(md_->distance_buffer_.begin(), md_->distance_buffer_.end(), mp_->default_dist_);
+  std::fill(md_->distance_buffer_neg_.begin(), md_->distance_buffer_neg_.end(),
+            mp_->default_dist_);
+  std::fill(md_->count_hit_.begin(), md_->count_hit_.end(), 0);
+  std::fill(md_->count_miss_.begin(), md_->count_miss_.end(), 0);
+  std::fill(md_->count_hit_and_miss_.begin(), md_->count_hit_and_miss_.end(), 0);
+  std::fill(md_->flag_rayend_.begin(), md_->flag_rayend_.end(), -1);
+  std::fill(md_->flag_visited_.begin(), md_->flag_visited_.end(), -1);
+  md_->cache_voxel_ = std::queue<int>();
+  md_->raycast_num_ = 0;
+  md_->local_bound_min_ = Eigen::Vector3i::Zero();
+  md_->local_bound_max_ = mp_->map_voxel_num_ - Eigen::Vector3i::Ones();
+  md_->update_min_ = md_->update_max_ = mp_->map_origin_;
+  md_->reset_updated_box_ = true;
+  ROS_INFO("SDFMap: in-memory occupancy grid cleared");
+}
+
+bool SDFMap::saveMap(const std::string& filename) {
+  if (filename.empty()) {
+    ROS_WARN("SDFMap: map save path is empty, nothing written");
+    return false;
+  }
+  if (md_->occupancy_buffer_.empty()) {
+    ROS_WARN("SDFMap: occupancy buffer is not initialized, nothing written");
+    return false;
+  }
+  // Keep an existing prior rather than replacing it with an untouched grid:
+  // the operator may have taken off, aborted, and landed without exploring.
+  const int known = knownVoxelCount();
+  if (known <= 0) {
+    ROS_WARN("SDFMap: map has no observed voxels, keeping the existing prior at %s",
+             filename.c_str());
+    return false;
+  }
+
+  const std::string dir = parentDirectory(filename);
+  if (!dir.empty()) ensureDirectory(dir);
+
+  std::ofstream file(filename, std::ios::binary | std::ios::trunc);
+  if (!file.is_open()) {
+    ROS_ERROR("SDFMap: cannot open %s for writing: %s", filename.c_str(), strerror(errno));
+    return false;
+  }
+
+  const int dims[3] = {mp_->map_voxel_num_(0), mp_->map_voxel_num_(1), mp_->map_voxel_num_(2)};
+  const double origin[3] = {mp_->map_origin_(0), mp_->map_origin_(1), mp_->map_origin_(2)};
+  const double resolution = mp_->resolution_;
+  const double inflation = mp_->obstacles_inflation_;
+  const size_t voxels = md_->occupancy_buffer_.size();
+
+  file.write(kGridMagic, sizeof(kGridMagic));
+  file.write(reinterpret_cast<const char*>(&kGridVersion), sizeof(kGridVersion));
+  file.write(reinterpret_cast<const char*>(dims), sizeof(dims));
+  file.write(reinterpret_cast<const char*>(origin), sizeof(origin));
+  file.write(reinterpret_cast<const char*>(&resolution), sizeof(resolution));
+  file.write(reinterpret_cast<const char*>(&inflation), sizeof(inflation));
+  file.write(reinterpret_cast<const char*>(&voxels), sizeof(voxels));
+  file.write(reinterpret_cast<const char*>(md_->occupancy_buffer_.data()),
+             static_cast<std::streamsize>(voxels * sizeof(double)));
+  file.flush();
+  const bool ok = file.good();
+  file.close();
+  if (!ok) {
+    ROS_ERROR("SDFMap: write to %s failed", filename.c_str());
+    return false;
+  }
+
+  ROS_INFO("SDFMap: saved occupancy grid to %s (%zu voxels, %d observed)", filename.c_str(),
+           voxels, known);
+  return true;
+}
+
+bool SDFMap::loadMap(const std::string& filename) {
+  if (filename.empty()) return false;
+
+  std::ifstream file(filename, std::ios::binary);
+  if (!file.is_open()) {
+    ROS_WARN("SDFMap: no prior map at %s, starting with an empty map", filename.c_str());
+    return false;
+  }
+
+  char magic[sizeof(kGridMagic)];
+  int version = 0;
+  int dims[3] = {0, 0, 0};
+  double origin[3] = {0.0, 0.0, 0.0};
+  double resolution = 0.0;
+  double inflation = 0.0;
+  size_t voxels = 0;
+
+  file.read(magic, sizeof(magic));
+  file.read(reinterpret_cast<char*>(&version), sizeof(version));
+  file.read(reinterpret_cast<char*>(dims), sizeof(dims));
+  file.read(reinterpret_cast<char*>(origin), sizeof(origin));
+  file.read(reinterpret_cast<char*>(&resolution), sizeof(resolution));
+  file.read(reinterpret_cast<char*>(&inflation), sizeof(inflation));
+  file.read(reinterpret_cast<char*>(&voxels), sizeof(voxels));
+
+  if (!file.good() || memcmp(magic, kGridMagic, sizeof(magic)) != 0) {
+    ROS_ERROR("SDFMap: %s is not a saved occupancy grid, ignoring it", filename.c_str());
+    return false;
+  }
+  if (version != kGridVersion) {
+    ROS_ERROR("SDFMap: %s uses grid format v%d, this build writes v%d; ignoring it",
+              filename.c_str(), version, kGridVersion);
+    return false;
+  }
+
+  const size_t expected =
+      static_cast<size_t>(mp_->map_voxel_num_(0)) * mp_->map_voxel_num_(1) * mp_->map_voxel_num_(2);
+  if (dims[0] != mp_->map_voxel_num_(0) || dims[1] != mp_->map_voxel_num_(1) ||
+      dims[2] != mp_->map_voxel_num_(2) || voxels != expected ||
+      md_->occupancy_buffer_.size() != expected) {
+    ROS_ERROR("SDFMap: prior map dims %dx%dx%d (%zu voxels) do not match current %dx%dx%d "
+              "(%zu voxels); ignoring %s",
+              dims[0], dims[1], dims[2], voxels, mp_->map_voxel_num_(0), mp_->map_voxel_num_(1),
+              mp_->map_voxel_num_(2), expected, filename.c_str());
+    return false;
+  }
+  if (std::fabs(resolution - mp_->resolution_) > 1e-6) {
+    ROS_ERROR("SDFMap: prior map resolution %.3f does not match current %.3f; ignoring %s",
+              resolution, mp_->resolution_, filename.c_str());
+    return false;
+  }
+  for (int i = 0; i < 3; ++i) {
+    if (std::fabs(origin[i] - mp_->map_origin_(i)) > 1e-3) {
+      ROS_ERROR("SDFMap: prior map origin [%.2f %.2f %.2f] does not match current "
+                "[%.2f %.2f %.2f]; ignoring %s",
+                origin[0], origin[1], origin[2], mp_->map_origin_(0), mp_->map_origin_(1),
+                mp_->map_origin_(2), filename.c_str());
+      return false;
+    }
+  }
+
+  file.read(reinterpret_cast<char*>(md_->occupancy_buffer_.data()),
+            static_cast<std::streamsize>(expected * sizeof(double)));
+  if (!file.good()) {
+    ROS_ERROR("SDFMap: %s is truncated, ignoring it", filename.c_str());
+    resetBuffer();
+    return false;
+  }
+  file.close();
+
+  // The inflated grid is a pure function of the occupancy grid plus the current
+  // inflation radius, so it is rebuilt here instead of being trusted from disk.
+  // That keeps a prior recorded with a different inflation setting usable.
+  md_->local_bound_min_ = Eigen::Vector3i::Zero();
+  md_->local_bound_max_ = mp_->map_voxel_num_ - Eigen::Vector3i::Ones();
+  rebuildInflateFromOccupancy();
+
+  md_->update_min_ = mp_->map_origin_;
+  md_->update_max_ = mp_->map_max_boundary_;
+  md_->reset_updated_box_ = false;
+  updateESDF3d();
+
+  ROS_INFO("SDFMap: loaded occupancy grid from %s (%zu voxels, %d observed, saved inflation "
+           "%.2f m, active %.2f m)",
+           filename.c_str(), expected, knownVoxelCount(), inflation, mp_->obstacles_inflation_);
+  return true;
+}
+
+void SDFMap::rebuildInflateFromOccupancy() {
+  // clearAndInflateLocalMap() rebuilds md_->occupancy_buffer_inflate_ over the
+  // current local bounds, so pointing those at the whole map restores the
+  // inflated grid for every loaded voxel. The virtual ceiling is not restamped:
+  // it is already part of the restored occupancy grid.
+  clearAndInflateLocalMap(false);
 }
 }  // namespace fast_planner
 // SDFMap

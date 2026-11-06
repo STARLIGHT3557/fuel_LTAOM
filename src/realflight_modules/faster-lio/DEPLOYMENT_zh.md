@@ -1,4 +1,4 @@
-> 本目录已复制到 uav_explor，随主工程统一管理，无独立 Git 仓库。构建与启动路径见 [集成说明](../../../docs/FASTER_LIO_INTEGRATION.md)。下文保留源工程历史资料。
+> 本目录已复制到 uav_explor_LTAOM，随主工程统一管理，无独立 Git 仓库。构建与启动路径见 [集成说明](../../../docs/FASTER_LIO_INTEGRATION.md)。下文保留源工程历史资料。
 
 # workspace_test 部署说明
 

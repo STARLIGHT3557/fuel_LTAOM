@@ -1,0 +1,59 @@
+<launch>
+  <!--
+    Handheld map-reuse test: LiDAR + LIO -> occupancy grid -> RViz.
+    No mission manager, no flight controller, no MAVROS, no exploration.
+
+    The cloud/pose conversion is the same fuel_bridge used in flight, so the
+    grid this builds is produced by exactly the same code path. Only the pose
+    source differs: LIO odometry instead of PX4 local position.
+
+    Start it through handheld_map.sh, which also launches the driver and LIO.
+  -->
+  <arg name="sensor_config"/>
+  <arg name="mapping_config" default="$(find prometheus_fuel)/config/map_reuse.yaml"/>
+  <arg name="world_frame" default="world"/>
+  <!-- LIO publishes world -> imu odometry; the cloud node advertises the
+       body-frame cloud in the IMU frame. -->
+  <arg name="odom_topic" default="/laserMapping/odometry"/>
+  <arg name="cloud_topic" default="/laserMapping/cloud_registered_body"/>
+  <arg name="cloud_frame" default="imu"/>
+  <arg name="session" default="fresh"/>
+  <arg name="map_dir" default="$(env HOME)/fuel_sessions"/>
+  <arg name="map_save_topic" default="/save_occ_map"/>
+  <arg name="status_period" default="5.0"/>
+  <arg name="rviz" default="true"/>
+  <arg name="rviz_config" default="$(find prometheus_fuel)/config/map_reuse.rviz"/>
+
+  <arg name="map_load_path"
+       value="$(eval (arg('map_dir') + '/occ_map.bin') if arg('session') == 'load' else '')"/>
+  <arg name="map_save_path"
+       value="$(eval (arg('map_dir') + '/occ_map.bin') if arg('session') != 'fresh' else '')"/>
+
+  <!-- World-frame cloud + sensor ray origin, with LiDAR extrinsics applied.
+       Same node and namespace as the flight setup, so it publishes the familiar
+       /fuel/cloud_world and /fuel/sensor_pose. -->
+  <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" ns="fuel"
+        output="screen" required="true">
+    <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
+    <rosparam command="load" file="$(arg sensor_config)"/>
+    <param name="world_frame" value="$(arg world_frame)"/>
+    <param name="cloud_frame" value="$(arg cloud_frame)"/>
+    <remap from="odom" to="$(arg odom_topic)"/>
+    <remap from="cloud" to="$(arg cloud_topic)"/>
+  </node>
+
+  <!-- Occupancy grid only: builds the map, saves/loads it, renders it. -->
+  <node pkg="prometheus_fuel" type="map_reuse_node" name="map_reuse" output="screen"
+        required="true">
+    <rosparam command="load" file="$(arg mapping_config)"/>
+    <param name="map_ros/map_load_path" value="$(arg map_load_path)"/>
+    <param name="map_ros/map_save_path" value="$(arg map_save_path)"/>
+    <param name="map_ros/save_topic" value="$(arg map_save_topic)"/>
+    <param name="status_period" value="$(arg status_period)"/>
+    <remap from="/map_ros/cloud" to="/fuel/cloud_world"/>
+    <remap from="/map_ros/pose" to="/fuel/sensor_pose"/>
+  </node>
+
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="map_reuse_rviz"
+        args="-d $(arg rviz_config) -f $(arg world_frame)"/>
+</launch>

@@ -12,6 +12,8 @@
 #include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <nav_msgs/Odometry.h>
+#include <std_msgs/Empty.h>
+#include <std_srvs/Trigger.h>
 
 #include <memory>
 #include <random>
@@ -37,6 +39,10 @@ private:
                          const geometry_msgs::PoseStampedConstPtr& pose);
   void updateESDFCallback(const ros::TimerEvent& /*event*/);
   void visCallback(const ros::TimerEvent& /*event*/);
+  // Multi-session map reuse: save the grid on a trigger topic or service call.
+  void saveMapCallback(const std_msgs::Empty::ConstPtr& msg);
+  bool saveMapService(std_srvs::Trigger::Request& request, std_srvs::Trigger::Response& response);
+  bool saveMap();
 
   void publishMapAll();
   void publishMapLocal();
@@ -67,6 +73,10 @@ private:
   ros::Publisher map_local_pub_, map_local_inflate_pub_, esdf_pub_, map_all_pub_, unknown_pub_,
       update_range_pub_, depth_pub_;
   ros::Timer esdf_timer_, vis_timer_;
+  ros::Subscriber save_sub_;
+  ros::ServiceServer save_srv_;
+  std::string map_load_path_, map_save_path_, map_save_topic_;
+  ros::Time last_save_time_;
 
   // params, depth projection
   double cx_, cy_, fx_, fy_;
@@ -80,6 +90,7 @@ private:
   double visualization_truncate_height_, visualization_truncate_low_;
   bool show_esdf_time_, show_occ_time_;
   bool show_all_map_;
+  bool compute_esdf_{true};
 
   // data
   // flags of map state

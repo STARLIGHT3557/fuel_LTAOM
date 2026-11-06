@@ -73,6 +73,14 @@ I 为 LIO 使用的 IMU 系，B 为飞机 FLU，L 为 LiDAR，W 为 MAVROS 局�
 
 任务管理器以执行器的 `ACTIVE` 状态确认返航轨迹开始执行；控制器 ACK 仅用于执行器与控制器之间的交接。`return_home/planning_timeout` 只约束首条返航轨迹激活前的等待时间，激活后不再用该计时触发恢复；规划器心跳、桥接输出超时及规划失败重试仍然有效。
 
+## 跨架次地图复用
+
+规划器的 occupancy grid 可以保存到磁盘，并在下一次启动时加载，第二架次直接从上次的探索边界继续。由 `session` 参数控制：`fresh`（默认，不保存不加载）、`save`（结束时保存）、`load`（先加载，结束时更新保存）。地图路径由 `map_dir` 换算成 `occ_map.bin`。
+
+保存内容只有栅格本身及尺寸、分辨率、原点；加载时校验这三项，不一致会拒绝加载并打印原因，不会把障碍物放到错误坐标。膨胀层按当前 `obstacles_inflation` 重建，ESDF 在加载后重算一次。任务管理器在开始返航、`/fuel/stop` 和落地确认后发布 `/save_occ_map` 触发保存，也可调用 `/fuel/save_map` 或 `/exploration_node/save_map` 手动保存。
+
+复用的前提是坐标系可复现：FUEL 使用 MAVROS 局部 ENU，两次启动必须让 PX4 局部原点与航向落在同一处，且地图尺寸、分辨率和地面高度一致。该功能不含跨架次全局重定位。完整启动步骤见 [地图复用说明](../../docs/MAP_REUSE.md)。
+
 ## 验证
 
 ```bash

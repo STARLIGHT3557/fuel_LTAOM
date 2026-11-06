@@ -10,16 +10,19 @@
   <arg name="battery_topic" default="/mavros/battery"/>
   <arg name="map_size_x" default="60.0"/>
   <arg name="map_size_y" default="50.0"/>
-  <arg name="map_size_z" default="6.0"/>
+  <arg name="map_size_z" default="10.0"/>
   <arg name="box_min_x" default="-1.0"/>
-  <arg name="box_min_y" default="-15.0"/>
-  <arg name="box_min_z" default="0.1"/>
-  <arg name="box_max_x" default="40.0"/>
-  <arg name="box_max_y" default="4.0"/>
-  <arg name="box_max_z" default="2.5"/>
-  <arg name="max_vel" default="1.0"/>
-  <arg name="max_acc" default="0.4"/>
+  <arg name="box_min_y" default="-10.0"/>
+  <arg name="box_min_z" default="0.3"/>
+  <arg name="box_max_x" default="30.0"/>
+  <arg name="box_max_y" default="10.0"/>
+  <arg name="box_max_z" default="10.0"/>
+  <arg name="max_vel" default="1.5"/>
+  <arg name="max_acc" default="0.6"/>
   <arg name="rviz" default="true"/>
+  <!-- Multi-session map reuse; see fuel.launch. 'fresh' keeps single-run behaviour. -->
+  <arg name="session" default="fresh"/>
+  <arg name="map_dir" default="$(env HOME)/fuel_sessions"/>
 
   <param name="use_sim_time" value="false"/>
   <include file="$(find uav_controller)/launch/geometric_controller.launch">
@@ -48,5 +51,7 @@
     <arg name="max_vel" value="$(arg max_vel)"/>
     <arg name="max_acc" value="$(arg max_acc)"/>
     <arg name="rviz" value="$(arg rviz)"/>
+    <arg name="session" value="$(arg session)"/>
+    <arg name="map_dir" value="$(arg map_dir)"/>
   </include>
 </launch>

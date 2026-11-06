@@ -57,6 +57,20 @@ public:
   void resetBuffer();
   void resetBuffer(const Eigen::Vector3d& min, const Eigen::Vector3d& max);
 
+  // Multi-session map reuse: persist and restore the occupancy grid so a later
+  // flight can resume exploration instead of mapping the same area again.
+  // Both calls return false when the map is unusable or inconsistent with the
+  // current map parameters (silently loading a mismatched grid would place
+  // obstacles at the wrong coordinates).
+  bool saveMap(const std::string& filename);
+  bool loadMap(const std::string& filename);
+  int knownVoxelCount() const;
+  // Observed (FREE or OCCUPIED) and occupied voxel counts in one pass, for
+  // progress reporting while mapping without a planner.
+  void voxelStats(int& known, int& occupied) const;
+  // Clear the in-memory grid (does not touch any saved file).
+  void resetMap();
+
   void getRegion(Eigen::Vector3d& ori, Eigen::Vector3d& size);
   void getBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax);
   void getUpdatedBox(Eigen::Vector3d& bmin, Eigen::Vector3d& bmax, bool reset = false);
@@ -64,7 +78,8 @@ public:
   int getVoxelNum();
 
 private:
-  void clearAndInflateLocalMap();
+  void clearAndInflateLocalMap(bool apply_ceiling = true);
+  void rebuildInflateFromOccupancy();
   void inflatePoint(const Eigen::Vector3i& pt, int step, vector<Eigen::Vector3i>& pts);
   void setCacheOccupancy(const int& adr, const int& occ);
   Eigen::Vector3d closetPointInMap(const Eigen::Vector3d& pt, const Eigen::Vector3d& camera_pt);

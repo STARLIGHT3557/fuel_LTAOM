@@ -1,10 +1,10 @@
-# uav_explor 中的 MID360 / Faster-LIO 代码
+# uav_explor_LTAOM 中的 MID360 / Faster-LIO 代码
 
 ## 目录与来源
 
 完整复制自 `/home/ubt/workspace_test/src/realflight_modules/faster-lio` 的当前文件。
 源仓库版本：`494cc2eccd81ee2e7f2fd541b3e1e29773ed4475`。
-原目录保留不动；复制目录及其子目录不含 `.git`，统一由 uav_explor 主仓库管理。
+原目录保留不动；复制目录及其子目录不含 `.git`，统一由 uav_explor_LTAOM 主仓库管理。
 
 ```text
 src/realflight_modules/faster-lio/
@@ -21,7 +21,7 @@ src/realflight_modules/faster-lio/
 
 ## 编译
 
-在 `/home/ubt/uav_explor` 执行：
+在 `/home/ubt/uav_explor_LTAOM` 执行：
 
 ```bash
 bash compile_fuel.sh

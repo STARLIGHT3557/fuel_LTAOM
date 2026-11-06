@@ -1,0 +1,40 @@
+# Mapping-only parameters for the handheld map-reuse test.
+# Deliberately independent of exploration.yaml: no frontier search or planner
+# runs here, so only the occupancy grid and its rendering matter.
+
+sdf_map:
+  resolution: 0.2
+  # Room/lab sized volume around the start pose. Change these only between
+  # sessions if you do not need to reuse the previous map (the saved geometry is
+  # validated on load).
+  map_size_x: 40.0
+  map_size_y: 40.0
+  map_size_z: 8.0
+  # The grid origin is (-map_size_x/2, -map_size_y/2, ground_height). It is
+  # anchored to the LIO origin, so every run must start at the same spot.
+  ground_height: -2.0
+  obstacles_inflation: 0.3
+  local_bound_inflate: 0.5
+  local_map_margin: 50
+  default_dist: 0.0
+  max_ray_length: 15.0
+  # Negative disables the synthetic ceiling; the map stays a plain volume.
+  virtual_ceil_height: -1.0
+  # Clearing rays are trusted a bit more than hits so walked-through space
+  # disappears promptly instead of lingering as a ghost wall.
+  p_hit: 0.65
+  p_miss: 0.35
+  p_min: 0.12
+  p_max: 0.90
+  p_occ: 0.80
+  optimistic: false
+  signed_dist: false
+
+map_ros:
+  frame_id: world
+  show_all_map: true
+  visualization_truncate_height: 6.0
+  visualization_truncate_low: -2.0
+  # The planner needs an ESDF; this test does not, and skipping it removes the
+  # single most expensive per-frame computation.
+  compute_esdf: false

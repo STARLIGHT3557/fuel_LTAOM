@@ -36,6 +36,9 @@ void MapROS::init() {
   node_.param("map_ros/show_esdf_time", show_esdf_time_, false);
   node_.param("map_ros/show_all_map", show_all_map_, false);
   node_.param("map_ros/frame_id", frame_id_, string("world"));
+  // The planner needs the ESDF; a mapping-only run does not, and recomputing it
+  // on every cloud update is the most expensive part of this node.
+  node_.param("map_ros/compute_esdf", compute_esdf_, true);
 
   proj_points_.resize(640 * 480 / (skip_pixel_ * skip_pixel_));
   point_cloud_.points.resize(640 * 480 / (skip_pixel_ * skip_pixel_));
@@ -58,6 +61,27 @@ void MapROS::init() {
 
   esdf_timer_ = node_.createTimer(ros::Duration(0.05), &MapROS::updateESDFCallback, this);
   vis_timer_ = node_.createTimer(ros::Duration(0.05), &MapROS::visCallback, this);
+
+  // Multi-session map reuse. A non-empty load path restores a previously saved
+  // occupancy grid, and a non-empty save path enables the save triggers. Both
+  // are empty in a "fresh" session, which keeps single-run behaviour unchanged.
+  node_.param("map_ros/map_load_path", map_load_path_, string(""));
+  node_.param("map_ros/map_save_path", map_save_path_, string(""));
+  node_.param("map_ros/save_topic", map_save_topic_, string("/save_occ_map"));
+  if (!map_load_path_.empty()) {
+    if (!map_->loadMap(map_load_path_)) {
+      ROS_WARN("MapROS: could not restore a prior map from %s; starting empty",
+               map_load_path_.c_str());
+    }
+  }
+  if (!map_save_path_.empty()) {
+    save_sub_ = node_.subscribe(map_save_topic_, 2, &MapROS::saveMapCallback, this);
+    save_srv_ = node_.advertiseService("save_map", &MapROS::saveMapService, this);
+    ROS_INFO("MapROS: session map reuse enabled, save path %s (topic %s, service save_map)",
+             map_save_path_.c_str(), map_save_topic_.c_str());
+  } else {
+    ROS_INFO("MapROS: session map reuse disabled (map_ros/map_save_path is empty)");
+  }
 
   map_all_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/sdf_map/occupancy_all", 10);
   map_local_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/sdf_map/occupancy_local", 10);
@@ -103,7 +127,7 @@ void MapROS::visCallback(const ros::TimerEvent& e) {
 }
 
 void MapROS::updateESDFCallback(const ros::TimerEvent& /*event*/) {
-  if (!esdf_need_update_) return;
+  if (!compute_esdf_ || !esdf_need_update_) return;
   auto t1 = ros::Time::now();
 
   map_->updateESDF3d();
@@ -433,5 +457,32 @@ void MapROS::publishESDF() {
   esdf_pub_.publish(cloud_msg);
 
   // ROS_INFO("pub esdf");
+}
+
+bool MapROS::saveMap() {
+  if (map_save_path_.empty()) {
+    ROS_WARN_THROTTLE(5.0, "MapROS: save requested but map_ros/map_save_path is empty");
+    return false;
+  }
+  // Writing the whole grid takes a moment; ignore retriggers that arrive while
+  // the previous request is still being handled.
+  const ros::Time now = ros::Time::now();
+  if (!last_save_time_.isZero() && now >= last_save_time_ &&
+      (now - last_save_time_).toSec() < 1.0) {
+    return true;
+  }
+  last_save_time_ = now;
+  return map_->saveMap(map_save_path_);
+}
+
+void MapROS::saveMapCallback(const std_msgs::Empty::ConstPtr& /*msg*/) { saveMap(); }
+
+bool MapROS::saveMapService(std_srvs::Trigger::Request& /*request*/,
+                            std_srvs::Trigger::Response& response) {
+  const bool saved = saveMap();
+  response.success = saved;
+  response.message = saved ? "occupancy map saved to " + map_save_path_
+                           : "occupancy map was not saved (see node log)";
+  return true;
 }
 }

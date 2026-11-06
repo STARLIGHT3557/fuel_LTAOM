@@ -57,6 +57,31 @@ bash start_realflight.sh
 当前最大速度为 `0.5 m/s`、最大加速度为 `0.2 m/s²`，控制器悬停推力参数为 `0.40`。
 单独调试 FUEL 时仍可使用 `fuel_realflight.sh`，它复用已运行的 MAVROS、定位和 EKF。
 
+## 跨架次地图复用
+
+FUEL 的 occupancy grid 可以保存到磁盘并在下一次启动时加载，避免重复探索同一区域。默认 `session:=fresh` 不保存也不加载，行为与原来一致。
+
+**只想验证地图复用、不想飞无人机**（人拿着无人机走动）：
+
+```bash
+bash handheld_map.sh session:=save   # 第一圈：走完一圈后 rosservice call /map_reuse/save_map "{}"
+bash handheld_map.sh session:=load   # 第二圈：先加载旧图，继续走，结束时再保存
+```
+
+该模式只启动雷达、Faster-LIO、栅格建图和 RViz，不启动 MAVROS、飞控、控制器和探索规划。
+
+**实机飞行**：
+
+```bash
+# 第一架次：结束时保存到 ~/fuel_sessions/occ_map.bin
+bash start_realflight.sh session:=save
+
+# 第二架次：先加载该地图，结束时继续更新保存
+bash start_realflight.sh session:=load
+```
+
+两次启动必须使用相同的地图尺寸、分辨率和地面高度（即同一套 launch 参数），并保证定位原点与航向可复现；否则加载会被拒绝或整张旧图错位。手动保存可随时执行 `rosservice call /fuel/save_map "{}"`。完整步骤、参数和排查见 [地图复用说明](docs/MAP_REUSE.md)。
+
 ## 开始、停止与返航
 
 在起飞前启动建图。由操作者解锁、手动起飞并稳定悬停，再切换 OFFBOARD；控制器锁定切换时的位置。确认：
@@ -80,5 +105,7 @@ rosservice call /fuel/return_home "{}"   # 人工请求规划返航
 PX4 的外部定位融合和 OFFBOARD 丢失后的行为由已有飞控配置负责，版本说明见 [PX4 1.14 外部定位](https://docs.px4.io/v1.14/en/ros/external_position_estimation) 与 [OFFBOARD](https://docs.px4.io/v1.14/en/flight_modes/offboard)。
 
 接口、转换细节与测试见 [FUEL 桥接说明](src/fuel_bridge/README.md)，本次检查结果见 [软件验证记录](docs/REALFLIGHT_VALIDATION.md)。
+
+跨架次保存与加载 FUEL 栅格地图的完整启动指令见 [地图复用说明](docs/MAP_REUSE.md)。
 
 MID360 驱动、定位与 EKF 的统一编译和启动方法见 [Faster-LIO 集成说明](docs/FASTER_LIO_INTEGRATION.md)。复制目录不包含独立 Git 仓库。
