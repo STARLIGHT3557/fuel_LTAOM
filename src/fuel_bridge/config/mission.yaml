@@ -1,0 +1,47 @@
+home_position: [0.0, 0.0, 1.0]
+world_frame: world
+source_id: fuel_planner
+data_timeout: 0.5
+
+# Multi-session orchestration:
+#   fresh  - single flight, no map save/load (default)
+#   save   - first flight, save both maps when the mission ends
+#   load   - later flight, auto-load prior maps and save again at the end
+session: fresh
+
+multisession:
+  map_save_topic: /save_occ_map       # MapROS save trigger (std_msgs/Empty)
+  prior_save_param: /save_prior_info  # LTAOM loop_optimization save trigger
+
+battery:
+  enabled: true
+  return_threshold: 0.30
+  data_timeout: 2.0
+
+exploration:
+  finish_confirm_cycles: 3
+  # Planning failures retry without a count limit; battery and timeout returns remain active.
+  retry_interval: 1.0
+  initial_plan_timeout: 10.0
+  planner_status_timeout: 4.0
+
+return_home:
+  replan_period: 1.0
+  # Timeouts request recovery; return has no failure-count or total-time limit.
+  retry_interval: 1.0
+  # A failed candidate keeps using a safe active trajectory. Retry sooner when
+  # its remaining execution window can no longer accommodate the normal delay.
+  urgent_retry_interval: 0.1
+  # Reserved after planning for transport, controller acknowledgement and the
+  # activation-time continuity recheck at the single scheduled switch time.
+  handover_margin: 0.1
+  planning_timeout: 10.0
+  position_tolerance: 0.20
+  speed_tolerance: 0.15
+  stable_time: 1.5
+
+trajectory_handover:
+  position_tolerance: 0.75
+  velocity_tolerance: 1.0
+  acceleration_tolerance: 2.0
+  timeout: 2.0

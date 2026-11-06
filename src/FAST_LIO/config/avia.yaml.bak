@@ -1,0 +1,18 @@
+common:
+    lid_topic:  "/livox/lidar"
+    imu_topic:  "/mavros/imu/data_raw"
+preprocess:
+    lidar_type:  5               # 5=XGRIDS，吃标准 PointCloud2（仿真发的不是 Livox CustomMsg）
+    scan_line:   4
+    blind:       0.5
+mapping:
+    acc_cov:     2
+    gyr_cov:     0.0001
+    b_acc_cov:   0.2
+    b_gyr_cov:   0.000001
+    fov_degree:  360             # MID360 水平 360
+    det_range:   40.0            # 仿真雷达最大量程 40m
+    extrinsic_T:  [ 0.1471448904, 0.0, 0.2769686356 ]
+    extrinsic_R: [ 1, 0, 0,
+                    0, 0.93937, -0.34290,
+                    0, 0.34290,  0.93937 ]

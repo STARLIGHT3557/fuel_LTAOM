@@ -1,0 +1,12 @@
+<launch>
+  <include file="$(find prometheus_fuel)/launch/fuel.launch">
+    <arg name="rviz" value="false"/>
+    <arg name="odom_topic" value="/fuel_test/odom"/>
+    <arg name="cloud_topic" value="/fuel_test/cloud"/>
+    <arg name="battery_topic" value="/fuel_test/battery"/>
+  </include>
+  <!-- Put the test goal in a removable synthetic wall. Production home stays (0,0,1). -->
+  <rosparam param="/fuel/mission_manager/home_position">[3.0, 0.0, 1.0]</rosparam>
+  <param name="/exploration_node/return_home/retry_interval" value="0.2"/>
+  <test test-name="persistent_return_planner" pkg="prometheus_fuel" type="test_return_planner.py" time-limit="65"/>
+</launch>

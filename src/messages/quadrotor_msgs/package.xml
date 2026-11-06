@@ -1,0 +1,14 @@
+<?xml version="1.0" ?>
+<package format="2">
+  <name>quadrotor_msgs</name>
+  <version>0.0.0</version>
+  <description>quadrotor_msgs</description>
+  <maintainer email="todo@todo.todo">Kartik Mohta</maintainer>
+  <license>BSD</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>uav_mission_msgs</depend>
+  <exec_depend>message_runtime</exec_depend>
+  <build_depend>message_generation</build_depend>
+</package>

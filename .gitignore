@@ -1,0 +1,15 @@
+/build/
+/devel/
+/install/
+/.catkin_workspace
+/.vscode/
+/.idea/
+__pycache__/
+*.pyc
+*.swp
+*.swo
+*~
+/.marscode/
+/.tmp/
+/tmp/
+*.log

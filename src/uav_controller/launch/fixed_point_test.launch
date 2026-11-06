@@ -1,0 +1,29 @@
+<launch>
+  <!-- 手动起飞后切入 OFFBOARD，立即阶跃到本地 ENU 目标（m），期望航向固定为 0 rad。 -->
+  <arg name="target_x" default="0.0" />
+  <arg name="target_y" default="0.0" />
+  <arg name="target_z" default="1.0" />
+  <arg name="controller_params_file" default="$(find uav_controller)/config/params.yaml" />
+  <arg name="fsm_params_file" default="$(find uav_controller)/config/fsm.yaml" />
+  <arg name="visualization_params_file" default="$(find uav_controller)/config/trajectory_rviz.yaml" />
+  <arg name="use_rviz" default="true" />
+  <arg name="rviz_config" default="$(find uav_controller)/rviz/trajectory.rviz" />
+
+  <node pkg="uav_controller" type="geometric_controller_node"
+        name="geometric_controller_node" output="screen">
+    <rosparam command="load" file="$(arg controller_params_file)" />
+    <rosparam command="load" file="$(arg fsm_params_file)" />
+    <param name="fsm/position_step" value="true" type="bool" />
+    <param name="fsm/step_target/x" value="$(arg target_x)" type="double" />
+    <param name="fsm/step_target/y" value="$(arg target_y)" type="double" />
+    <param name="fsm/step_target/z" value="$(arg target_z)" type="double" />
+  </node>
+
+  <node pkg="uav_controller" type="trajectory_rviz_node"
+        name="trajectory_rviz_node" output="screen">
+    <rosparam command="load" file="$(arg visualization_params_file)" />
+  </node>
+
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz"
+        name="uav_controller_rviz" args="-d $(arg rviz_config)" />
+</launch>

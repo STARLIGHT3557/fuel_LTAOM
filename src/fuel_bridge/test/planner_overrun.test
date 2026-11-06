@@ -1,0 +1,12 @@
+<launch>
+  <include file="$(find prometheus_fuel)/launch/fuel.launch">
+    <arg name="rviz" value="false"/>
+    <arg name="odom_topic" value="/fuel_test/odom"/>
+    <arg name="cloud_topic" value="/fuel_test/cloud"/>
+    <arg name="battery_topic" value="/fuel_test/battery"/>
+  </include>
+  <!-- Force real planning to exceed its nominal look-ahead without adding sleeps
+       or test hooks to the production planner. Success must remain EXPLORE. -->
+  <param name="/exploration_node/fsm/replan_time" value="0.000001"/>
+  <test test-name="fuel_planner_overrun" pkg="prometheus_fuel" type="test_planner.py" time-limit="90"/>
+</launch>

@@ -1,0 +1,74 @@
+<launch>
+  <!--
+    LTAOM multi-session lidar SLAM pipeline for the P600 MID360 simulation.
+
+    Starts FAST-LIO (lidar odometry) -> STD (stable-triangle loop detection) ->
+    LTAOM pose-graph optimization, and exposes the loop-corrected pose for FUEL.
+
+    Together with fuel.launch this realizes the two-flight workflow:
+      1st flight:  bash fuel_simulation.sh session:=save   odom_topic:=/ltaom/odom_aligned
+                   (plus this launch with session:=save) -> saves LTAOM prior
+                   (keyframe poses + STD descriptors + planes) and the FUEL grid map.
+      2nd flight:  bash fuel_simulation.sh session:=load   odom_topic:=/ltaom/odom_aligned
+                   (plus this launch with session:=load)  -> STD relocalizes against the
+                   prior map, PGO aligns the current frame to the first flight, and FUEL
+                   resumes from the loaded occupancy map.
+
+    session must match the session passed to fuel.launch / simulation.launch.
+  -->
+  <arg name="session" default="fresh"/>
+  <arg name="map_prior_dir" default="$(env HOME)/fuel_sim_logs"/>
+  <arg name="lidar_topic" default="/livox/lidar"/>
+  <arg name="imu_topic" default="/mavros/imu/data_raw"/>
+  <!-- FAST-LIO output (relocalized against the prior map when multisession_mode=1). -->
+  <arg name="odom_topic" default="/aft_mapped_to_init"/>
+  <arg name="rviz" default="false"/>
+
+  <arg name="multisession_mode"
+       value="$(eval {'fresh': 0, 'save': 2, 'load': 1}[arg('session')])"/>
+  <param name="multisession_mode" type="int" value="$(arg multisession_mode)"/>
+  <param name="SaveDir" type="string" value="$(arg map_prior_dir)/ltaom/"/>
+
+  <!-- 1. FAST-LIO lidar odometry (standalone executable; nodelet plugin is disabled). -->
+  <rosparam command="load" file="$(find fast_lio)/config/avia.yaml"/>
+  <param name="common/lid_topic" value="$(arg lidar_topic)"/>
+  <param name="common/imu_topic" value="$(arg imu_topic)"/>
+  <param name="feature_extract_enable" type="bool" value="0"/>
+  <param name="point_filter_num" type="int" value="5"/>
+  <param name="max_iteration" type="int" value="4"/>
+  <param name="dense_map_enable" type="bool" value="1"/>
+  <param name="filter_size_surf" type="double" value="0.3"/>
+  <param name="filter_size_map" type="double" value="0.3"/>
+  <param name="cube_side_length" type="double" value="1000"/>
+  <param name="correction_ver_thr" type="double" value="0.20"/>
+  <param name="correction_dis_interval" type="double" value="200"/>
+  <param name="dy_mapretrival_range" type="double" value="30"/>
+  <node pkg="fast_lio" type="fastlio_mapping" name="laserMapping" output="screen"/>
+
+  <!-- 2. STD loop detection (nodelet; delayed to avoid an Eigen alignment race). -->
+  <param name="lcd_config_path" type="string"
+         value="$(find std_loop)/config/config_avia.yaml"/>
+  <arg name="node_start_delay" default="1.0"/>
+  <node pkg="nodelet" type="nodelet"
+        args="standalone std_loop/loop_detection_plugin"
+        name="loop_detection"
+        launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@'"
+        output="screen"/>
+
+  <!-- 3. LTAOM pose-graph optimization (standalone executable). -->
+  <rosparam command="load"
+            file="$(find loop_optimization)/launch/loopopt_config_avia.yaml"/>
+  <node pkg="loop_optimization" type="loop_optimization_node"
+        name="loop_optimization_node" output="screen"/>
+
+  <!-- 4. Adapt the relocalized FAST-LIO pose for FUEL and the geometric controller. -->
+  <node pkg="prometheus_fuel" type="ltaom_odom_adapter" name="ltaom_odom_adapter"
+        output="screen">
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+  </node>
+
+  <group if="$(arg rviz)">
+    <node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find fast_lio)/rviz_cfg/loam_livox.rviz"/>
+  </group>
+</launch>
