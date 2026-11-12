@@ -7,6 +7,14 @@
 
 namespace uav_controller {
 namespace {
+// 起转结束时的油门占估计悬停油门的比例。开环阶段没有反馈，留出余量：
+// 悬停油门初值偏高 25% 以内也不会在开环阶段离地。
+constexpr double kSpoolEndHoverFraction = 0.8;
+// 起转中高度上升超过此值（m）说明已经离地，立即转闭环。
+constexpr double kSpoolLiftoffRise = 0.1;
+// 起飞阶段高度上升达到此值（m）才算真正离地，可以开始估计油门。
+constexpr double kEstimateLiftoffRise = 0.2;
+
 double yawOf(const Eigen::Quaterniond &q) {
   return std::atan2(2.0 * (q.w() * q.z() + q.x() * q.y()),
                     1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z()));
@@ -105,7 +113,7 @@ FlightController::FlightController(const ControllerParams &control,
     : controller_(control), params_(flight), mission_id_(mission_seed) {
   if (!flight.step_target.allFinite() ||
       !std::isfinite(flight.takeoff_height) || !positive(flight.takeoff_speed) ||
-      !nonnegative(flight.hover_before) ||
+      !nonnegative(flight.spool_time) || !nonnegative(flight.hover_before) ||
       !positive(flight.position_tolerance) || !positive(flight.speed_tolerance) ||
       !positive(flight.stable_time) || !positive(flight.trajectory_timeout) ||
       !positive(flight.takeoff_timeout) ||
@@ -211,6 +219,8 @@ void FlightController::transitionTo(FlightMode mode, MissionStage stage,
                               params_.takeoff_speed;
           saw_airborne_ = false;
           mission_started_this_arm_ = true;
+          spooling_ = params_.spool_time > 0.0;
+          takeoff_profile_start_ = now;
           break;
         case MissionStage::HOVER_BEFORE:
           reference_ = origin_;
@@ -346,8 +356,16 @@ void FlightController::advanceMission(const FlightInput &input, double now) {
   const auto current_stage = stage_;
   switch (stage_) {
     case MissionStage::TAKEOFF: {
+      // 起转时间到，或高度已经上升（初值偏高提前离地），转闭环并开始计时起飞轨迹。
+      if (spooling_ && (now - entered_at_ >= params_.spool_time ||
+                        input.state.pos.z() - takeoff_start_.z() > kSpoolLiftoffRise)) {
+        spooling_ = false;
+        takeoff_profile_start_ = now;
+      }
       // Quintic position profile; velocity/acceleration are its derivatives.
-      const double s = std::clamp((now - entered_at_) / takeoff_duration_, 0.0, 1.0);
+      // 起转期间 s=0，参考保持在起飞点。
+      const double s = spooling_
+          ? 0.0 : std::clamp((now - takeoff_profile_start_) / takeoff_duration_, 0.0, 1.0);
       const double s2 = s * s, s3 = s2 * s;
       const double h = params_.takeoff_height - takeoff_start_.z();
       reference_.pos.z() = takeoff_start_.z() + h * s3 * (10.0 - 15.0*s + 6.0*s2);
@@ -438,14 +456,36 @@ OutputPolicy FlightController::selectOutputPolicy(const FlightInput &input, bool
   return OutputPolicy::NO_OUTPUT;
 }
 
+// 开环起转：油门从 0 线性升到 kSpoolEndHoverFraction × 估计悬停油门。姿态设定为
+// 当前姿态，不走位置环，地面不平时也不会产生差动推力。
+AttitudeThrustCommand FlightController::spoolCommand(const ControllerState &state,
+                                                     double now) const {
+  const double progress = std::clamp((now - entered_at_) / params_.spool_time, 0.0, 1.0);
+  const double hover = controller_.params().gravity / controller_.thr2acc();
+  AttitudeThrustCommand command;
+  command.q = state.quat;
+  command.thrust = progress * kSpoolEndHoverFraction * hover;
+  command.thrust_raw = command.thrust;
+  return command;
+}
+
 FlightOutput FlightController::output(const FlightInput &input, double now, bool feedback_ready) {
   auto policy = selectOutputPolicy(input, feedback_ready);
   AttitudeThrustCommand command;
   if (policy == OutputPolicy::CLOSED_LOOP) {
-    controller_.setEstimateEnabled(params_.estimate_thrust && input.imu_valid &&
-                                   std::isfinite(input.state.az_specific_up) &&
-                                   input.armed && input.offboard);
-    command = controller_.computeAttitudeThrust(reference_, input.state, now);
+    if (stage_ == MissionStage::TAKEOFF && spooling_) {
+      command = spoolCommand(input.state, now);
+    } else {
+      // 只在确认离地后估计油门：地面托着飞机时加速度计读数与油门无关，而 PX4 的
+      // IN_AIR 可能早于实际离地，所以起飞阶段还要求高度确实上升。
+      const bool lifted_off = input.landing_state == LandingState::IN_AIR &&
+          (stage_ != MissionStage::TAKEOFF ||
+           input.state.pos.z() - takeoff_start_.z() >= kEstimateLiftoffRise);
+      controller_.setEstimateEnabled(params_.estimate_thrust && input.imu_valid &&
+                                     std::isfinite(input.state.az_body) &&
+                                     input.armed && input.offboard && lifted_off);
+      command = controller_.computeAttitudeThrust(reference_, input.state, now);
+    }
     if (!command.q.coeffs().allFinite() || !std::isfinite(command.thrust) ||
         !std::isfinite(command.thrust_raw)) {
       recovery_pending_ = true;

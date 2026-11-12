@@ -49,6 +49,7 @@ struct FlightParams {
   Eigen::Vector3d step_target{0.0, 0.0, 1.0};  // Absolute local ENU position [m].
   double takeoff_height{1.5};  // Absolute local ENU z, NOT an offset from launch.
   double takeoff_speed{0.3};
+  double spool_time{0.0};  // 地面起飞前的开环起转时长 [s]，0 表示不起转。
   double hover_before{5.0};
   double position_tolerance{0.15};
   double speed_tolerance{0.15};
@@ -145,6 +146,7 @@ private:
   void advanceMission(const FlightInput &input, double now);
   void checkStageTimeout(const FlightInput &input, double now);
   OutputPolicy selectOutputPolicy(const FlightInput &input, bool feedback_ready) const;
+  AttitudeThrustCommand spoolCommand(const ControllerState &state, double now) const;
   FlightOutput output(const FlightInput &input, double now, bool feedback_ready);
 
   GeometricController controller_;
@@ -157,6 +159,8 @@ private:
   ControllerSetpoint origin_;
   Eigen::Vector3d takeoff_start_{Eigen::Vector3d::Zero()};
   double takeoff_duration_{0.0};
+  double takeoff_profile_start_{0.0};  // 平滑起飞轨迹开始计时的时刻（起转结束后）。
+  bool spooling_{false};               // 仅在 TAKEOFF 阶段有效。
   double entered_at_{std::numeric_limits<double>::quiet_NaN()};
   ConditionTimer stable_timer_, recovery_timer_;
   double last_update_{std::numeric_limits<double>::quiet_NaN()};

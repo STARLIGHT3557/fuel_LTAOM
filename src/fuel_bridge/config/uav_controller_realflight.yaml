@@ -1,24 +1,31 @@
+# 实飞控制器参数（geometric_controller_node），由 realflight.launch 加载。
+# 状态机参数另见 src/uav_controller/config/fsm.yaml；完整说明见 docs/REALFLIGHT_PARAMETERS.md。
 
-
+# 位置误差增益（本地 ENU，x/y/z）。跟踪偏慢时增大，振荡时减小。
 k_pos:
   x: 4.0
   y: 4.0
   z: 6.0
+# 速度误差增益。抖动或超调时调整。
 k_vel:
   x: 3.0
   y: 3.0
   z: 4.0
 
-hover_percentage: 0.40
+# 悬停油门初值 [0, 1]，换电池或负载后需重新确认；在线估计从这里开始修正。
+hover_percentage: 0.45
+# 在线估计悬停油门：确认离地后才估计（地面自动起飞时要求高度上升 0.2 m），结果限制在 [0.1, 0.8]。
 estimate_thrust: true
+# 位置/速度反馈加速度上限，单位 m/s²，用于限制大误差时的倾角。
 max_a_fb: 8.0
+# 重力加速度，单位 m/s²。
 gravity: 9.81
 
+# 控制频率，单位 Hz。推力估计依赖 35~45 ms 前的指令，不建议低于 100。
 control_rate_hz: 100.0
-feedback_timeout: 0.5
-state_timeout: 2.0
-timestamp_future_tolerance: 0.1 # 允许消息源时间戳最多超前本机时间 100 ms。
+timestamp_future_tolerance: 0.1 # 允许轨迹点时间戳最多超前本机时间 100 ms。
+# 轨迹点输入话题（bridge 转发的 FUEL 指令）。
 setpoint_topic: /uav_controller/trajectory_setpoint
 
-print_tracking: false # Mission manager prints the flight/battery summary.
-print_period_ms: 500
+print_tracking: false # 是否周期打印跟踪误差；实飞时状态行由任务管理器打印。
+print_period_ms: 500  # 跟踪误差打印周期，单位 ms。

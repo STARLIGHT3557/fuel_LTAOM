@@ -13,6 +13,7 @@ uint8 OUTPUT_TIMEOUT=7
 uint8 TRAJECTORY_UNSAFE=8
 # A validated terminal trajectory is executing under continuous safety checks.
 uint8 SETTLING=9
+uint8 OBSERVING_HOME=10
 uint8 state
 
 uint32 consecutive_failures

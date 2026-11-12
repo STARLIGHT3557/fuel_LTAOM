@@ -1,14 +1,16 @@
-# 飞行流程：起飞 → 起飞后悬停 → 持续执行轨迹，直到任务被中断。
+# 飞行流程：起转 → 起飞 → 起飞后悬停 → 持续执行轨迹，直到任务被中断。
 # 降落和上锁由操作者完成；所有位置均使用本地 ENU 坐标系。
+# 只有在地面解锁并切 OFFBOARD 时才会用到下面的自动起飞参数；手动起飞后再切 OFFBOARD 不经过这段。
 fsm:
   position_step: false     # fixed_point_test.launch 覆盖为 true：手动起飞，OFFBOARD 位置阶跃。
-  takeoff_height: 1.0       # 绝对高度目标 z=1.5，而不是起飞点 z 加 1.5，单位：m。
+  takeoff_height: 1.0       # 自动起飞的绝对高度目标 z=1.0，而不是起飞点 z 加 1.0，单位：m。
   takeoff_speed: 0.3        # 最大上升参考速度，单位：m/s。
+  spool_time: 3.0           # 起飞前开环起转时长：油门线性升到 0.8 倍悬停油门，0 表示不起转，单位：s。
   hover_before: 2.0         # 开始外部轨迹前连续稳定悬停的时间，单位：s。
-  position_tolerance: 0.15
-  speed_tolerance: 0.15
-  stable_time: 1.0
-  trajectory_timeout: 0.5       # 收到首个轨迹点后，轨迹消息允许的最大延迟，单位：s。
-  takeoff_timeout: 30.0         # 起飞阶段的最长时间，包含到位稳定过程，单位：s。
+  position_tolerance: 0.15  # 判断到位的位置误差，单位：m。
+  speed_tolerance: 0.15     # 判断到位的速度误差，单位：m/s。
+  stable_time: 1.0          # 到位后需持续稳定的时间，单位：s。
+  trajectory_timeout: 0.5       # 收到首个轨迹点后，轨迹消息允许的最大延迟，超时转为 HOLD，单位：s。
+  takeoff_timeout: 30.0         # 起飞阶段的最长时间，包含起转和到位稳定过程，单位：s。
   hover_timeout: 30.0           # 起飞后悬停阶段完成稳定等待的最长时间，单位：s。
   feedback_recovery_time: 0.2   # 反馈恢复后需连续有效的时间，模式切换不能跳过，单位：s。

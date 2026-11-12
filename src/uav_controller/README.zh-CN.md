@@ -13,8 +13,8 @@
 
 状态机包含 `WAIT`、`TAKEOFF`、`HOVER_BEFORE`、`TRAJECTORY`、`HOLD` 和 `FEEDBACK_LOST`。
 
-- 普通任务模式可以生成平滑垂直起飞参考，到达目标后稳定悬停，再接收外部轨迹。
-- `fsm/direct_trajectory=true` 用于 FUEL 等规划器。无人机在空中切入 OFFBOARD 后先保持实测位置，收到第一个新鲜外部目标后开始轨迹跟踪；轨迹结束或超时后回到 `HOLD`。
+- 普通任务模式可以先让电机缓慢起转（`fsm/spool_time`），再生成平滑垂直起飞参考，到达目标后稳定悬停，再接收外部轨迹。
+- `fsm/direct_trajectory=true` 用于 FUEL 等规划器。无人机在空中切入 OFFBOARD 后先保持实测位置，在地面切入则先执行上述起飞；收到第一个新鲜外部目标后开始轨迹跟踪；轨迹结束或超时后回到 `HOLD`。
 - `fsm/position_step=true` 用于手动测试。手动起飞后切入 OFFBOARD，立即采用配置的本地 ENU 绝对目标。
 
 轨迹参考包含位置、速度、加速度和 yaw。控制器向 `/mavros/setpoint_raw/attitude` 发布目标姿态四元数和归一化总推力；姿态角速度与执行器内环仍由 PX4 完成。
@@ -48,7 +48,7 @@ FUEL 集成会使用 P600 专用参数启动 `geometric_controller.launch`，并
 | `/uav_controller/fsm_status` | `uav_controller/FlightStatus` | 状态、切换原因、输出策略和反馈健康状态 |
 | `/mavros/setpoint_raw/attitude` | `mavros_msgs/AttitudeTarget` | 目标姿态与推力 |
 
-控制器内部采用本地 ENU 位置和 FLU 姿态约定。任务编号、有限值检查、反馈时效、轨迹超时、时钟中断处理和恢复等待用于阻止陈旧或无效数据继续控制。
+控制器内部采用本地 ENU 位置和 FLU 姿态约定。任务编号、有限值检查、轨迹超时、时钟中断处理和恢复等待用于阻止无效数据继续控制。MAVROS 已连接且收到过位姿和速度即视为反馈有效，不检查反馈时间戳的时效。
 
 ## 测试
 

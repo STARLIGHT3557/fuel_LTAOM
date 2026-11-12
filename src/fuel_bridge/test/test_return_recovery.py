@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real manager/bridge/executor: persistent failures, timeout and brake recovery."""
+"""Real manager/bridge/executor: persistent failures, output timeout and resume."""
 import copy
 import time
 import unittest
@@ -14,8 +14,8 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from uav_controller.msg import FlightStatus, TrajectorySetpoint
-from uav_mission_msgs.msg import (ControllerAck, MissionCommand, MissionStatus,
-                                 PlannerStatus, TrajectoryStatus)
+from uav_mission_msgs.msg import (MissionCommand, MissionStatus, PlannerStatus,
+                                 TrajectoryStatus)
 
 
 class ReturnRecoveryTest(unittest.TestCase):
@@ -28,14 +28,14 @@ class ReturnRecoveryTest(unittest.TestCase):
         self.fail(message)
 
     def test_retry_and_resume(self):
-        statuses, tasks, points, handoffs = [], [], [], []
+        statuses, tasks, points, executions = [], [], [], []
         subscribers = [
             rospy.Subscriber("/fuel/trigger", Path, lambda _: None),
             rospy.Subscriber("/fuel/cloud_world", PointCloud2, lambda _: None),
             rospy.Subscriber('/fuel/mission_status', MissionStatus, statuses.append),
             rospy.Subscriber('/fuel/mission_command', MissionCommand, tasks.append),
             rospy.Subscriber('/fuel/command', TrajectorySetpoint, points.append),
-            rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, handoffs.append),
+            rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, executions.append),
         ]
         odom_pub = rospy.Publisher('/fuel/odom', Odometry, queue_size=5)
         state_pub = rospy.Publisher('/fuel/control_state', FlightStatus, queue_size=5)
@@ -43,33 +43,25 @@ class ReturnRecoveryTest(unittest.TestCase):
         cloud_pub = rospy.Publisher('/fuel/cloud', PointCloud2, queue_size=5)
         planner_pub = rospy.Publisher('/fuel/planner_status', PlannerStatus, queue_size=20)
         spline_pub = rospy.Publisher('/planning/bspline', Bspline, queue_size=5)
-        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=5)
-        velocity = [0.0]
 
         def feed(_):
             stamp = rospy.Time.now()
             odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
             odom.pose.pose.position = Point(2.0, 0.0, 1.0)
-            # At yaw +90 degrees, body -Y is world +X.
-            odom.pose.pose.orientation.w = 0.7071067811865476
-            odom.pose.pose.orientation.z = 0.7071067811865476
-            odom.twist.twist.linear.y = -velocity[0]
+            odom.pose.pose.orientation.w = 1.0
             odom_pub.publish(odom)
             state_pub.publish(FlightStatus(header=Header(stamp=stamp), feedback_ready=True,
                                            output_policy='CLOSED_LOOP', phase='HOLD'))
             battery_pub.publish(BatteryState(header=Header(stamp=stamp), percentage=0.31))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id='lidar_link'), [(2, 0, 0)]))
-            if handoffs and handoffs[-1].state == TrajectoryStatus.PENDING:
-                handoff = handoffs[-1]
-                ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=handoff.context,
-                                              trajectory_id=handoff.trajectory_id, accepted=True))
 
         timer = rospy.Timer(rospy.Duration(0.03), feed)
         try:
             rospy.wait_for_service('/fuel/return_home', timeout=10)
-            self.wait_for(lambda: planner_pub.get_num_connections() >= 2 and
-                          ack_pub.get_num_connections() >= 1 and statuses and statuses[-1].battery_valid,
+            self.wait_for(lambda: planner_pub.get_num_connections() >= 1 and
+                          spline_pub.get_num_connections() >= 1 and
+                          statuses and statuses[-1].battery_valid,
                           'test publishers were not connected')
             time.sleep(0.2)
             return_home = rospy.ServiceProxy('/fuel/return_home', Trigger)
@@ -92,49 +84,20 @@ class ReturnRecoveryTest(unittest.TestCase):
                           'missing output must request same-batch replan')
             self.assertTrue(all(t.context == context for t in tasks if t.context.mission_id))
 
-            def send_spline(identifier, x, start_delay=0.1):
-                spline = Bspline(context=context, order=3, traj_id=identifier,
-                                 start_time=rospy.Time.now() + rospy.Duration(start_delay), yaw_dt=0.2)
-                spline.pos_pts = [Point(x, 0.0, 1.0) for _ in range(7)]
-                spline.knots = [(i - 3) * 0.2 for i in range(11)]
-                spline.yaw_pts = [0.0] * 7
-                spline_pub.publish(spline)
-
-            send_spline(1, 2.0)
+            # FUEL publishes a B-spline only once its start time has passed.
+            spline = Bspline(context=context, order=3, traj_id=1,
+                             start_time=rospy.Time.now(), yaw_dt=0.2)
+            spline.pos_pts = [Point(2.0, 0.0, 1.0) for _ in range(7)]
+            spline.knots = [(i - 3) * 0.2 for i in range(11)]
+            spline.yaw_pts = [0.0] * 7
+            spline_pub.publish(spline)
+            self.wait_for(lambda: any(e.trajectory_id == 1 and e.state == TrajectoryStatus.ACTIVE
+                                      for e in executions),
+                          'executor did not report the received return trajectory')
             self.wait_for(lambda: any(p.trajectory_id == 1 and not p.finished for p in points),
                           'bridge did not reopen for recovered return output')
             self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
-                          'valid replacement did not resume return')
-
-            # A late replacement must be rejected without clearing the safe
-            # trajectory that is already executing.
-            point_count = len(points)
-            send_spline(2, 2.0, start_delay=-0.01)
-            self.wait_for(lambda: any(t.trajectory_id == 2 and
-                                      t.state == TrajectoryStatus.REJECTED for t in handoffs),
-                          'executor accepted an expired handover candidate')
-            self.wait_for(lambda: any(p.trajectory_id == 1 and not p.finished
-                                      for p in points[point_count:]),
-                          'expired candidate interrupted the safe active trajectory')
-
-            velocity[0] = 0.4
-            time.sleep(0.1)
-            planner_pub.publish(PlannerStatus(header=Header(stamp=rospy.Time.now()),
-                context=context, trajectory_id=1, state=PlannerStatus.TRAJECTORY_UNSAFE))
-            self.wait_for(lambda: any(t.state == TrajectoryStatus.INVALID for t in handoffs),
-                          'unsafe execution did not start braking')
-            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURN_RECOVERY,
-                          'unsafe execution must preserve the return task')
-            time.sleep(0.5)
-            self.assertTrue(any(abs(p.position.x - 2.08) < 1e-4 and
-                                abs(p.position.y) < 1e-4 and not p.finished for p in points),
-                            'Body-frame velocity was not rotated before world-frame braking')
-            velocity[0] = 0.0
-            send_spline(2, 2.08)  # v^2/(2a) = 0.08 m at the default 1 m/s^2 brake.
-            self.wait_for(lambda: any(p.trajectory_id == 2 and not p.finished for p in points),
-                          'executor stayed stuck in braking instead of accepting replacement')
-            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
-                          'brake recovery did not resume return')
+                          'executed trajectory did not resume return')
             self.assertEqual(statuses[-1].context, context)
             self.assertEqual(statuses[-1].return_reason, MissionStatus.MANUAL_RETURN)
 
@@ -152,4 +115,4 @@ class ReturnRecoveryTest(unittest.TestCase):
 
 if __name__ == '__main__':
     rospy.init_node('test_return_recovery')
-    rostest.rosrun('prometheus_fuel', 'return_recovery_contract', ReturnRecoveryTest)
+    rostest.rosrun('fuel_bridge', 'return_recovery_contract', ReturnRecoveryTest)

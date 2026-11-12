@@ -11,8 +11,8 @@
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <sensor_msgs/BatteryState.h>
-#include <std_msgs/Empty.h>
 #include <std_srvs/Trigger.h>
+#include <std_msgs/Empty.h>
 #include <uav_controller/FlightStatus.h>
 #include <uav_mission_msgs/MissionCommand.h>
 #include <uav_mission_msgs/MissionStatus.h>
@@ -60,11 +60,31 @@ const char* missionReasonName(uint8_t reason) {
     default: return "UNKNOWN";
   }
 }
+
+const char* plannerStateName(uint8_t state) {
+  using Planner = uav_mission_msgs::PlannerStatus;
+  switch (state) {
+    case Planner::IDLE: return "IDLE";
+    case Planner::PLANNING: return "PLANNING";
+    case Planner::TRAJECTORY_READY: return "TRAJECTORY_READY";
+    case Planner::EXECUTING: return "EXECUTING";
+    case Planner::EXPLORATION_DONE: return "EXPLORATION_DONE";
+    case Planner::GOAL_REACHED: return "GOAL_REACHED";
+    case Planner::FAILED: return "FAILED";
+    case Planner::OUTPUT_TIMEOUT: return "OUTPUT_TIMEOUT";
+    case Planner::TRAJECTORY_UNSAFE: return "TRAJECTORY_UNSAFE";
+    case Planner::OBSERVING_HOME: return "OBSERVING_HOME";
+    case Planner::SETTLING: return "SETTLING";
+    default: return "UNKNOWN";
+  }
+}
 }  // namespace
 
 class MissionManager {
  public:
+  // 参数取自 fuel_bridge/config/mission.yaml，说明见 docs/REALFLIGHT_PARAMETERS.md。
   MissionManager() : pnh_("~") {
+    // 返航点（本地 ENU，m），到达后悬停并把航向转到 0
     std::vector<double> home;
     if (!pnh_.getParam("home_position", home) || home.size() != 3) {
       home = {0.0, 0.0, 1.0};
@@ -74,31 +94,39 @@ class MissionManager {
     home_.z = home[2];
     if (!finitePoint(home_)) throw std::invalid_argument("home_position must be finite");
 
+    // 低电量返航：有效电量低于阈值（比例）时返航；电量数据超时视为无效
     pnh_.param("battery/enabled", battery_enabled_, true);
     pnh_.param("battery/return_threshold", battery_threshold_, 0.30);
     pnh_.param("battery/data_timeout", battery_timeout_, 2.0);
+    // 探索保护：首条轨迹等待时间、规划器心跳超时（s），超时则返航
     pnh_.param("exploration/initial_plan_timeout", initial_plan_timeout_, 10.0);
     pnh_.param("exploration/planner_status_timeout", planner_status_timeout_, 4.0);
+    // 返航：重试间隔、首条返航轨迹等待时间（s），以及到家判定的位置/速度误差和稳定时间
     pnh_.param("return_home/retry_interval", return_retry_interval_, 1.0);
     pnh_.param("return_home/planning_timeout", return_planning_timeout_, 10.0);
     pnh_.param("return_home/position_tolerance", position_tolerance_, 0.20);
     pnh_.param("return_home/speed_tolerance", speed_tolerance_, 0.15);
     pnh_.param("return_home/stable_time", stable_time_, 1.5);
-    pnh_.param("data_timeout", data_timeout_, 0.5);
-    pnh_.param("status_log_period", status_log_period_, 2.0);
+    // 末段轨迹结束后多久还没到家就重新规划（s）
+    pnh_.param("return_home/arrival_timeout", arrival_timeout_, 5.0);
+    pnh_.param("data_timeout", data_timeout_, 0.5);            // 里程计、控制器状态新鲜度（s）
+    pnh_.param("status_log_period", status_log_period_, 2.0);  // 终端状态行打印周期（s）
     pnh_.param<std::string>("world_frame", world_frame_, "world");
+    // 任务授权标识，规划器、bridge 和控制器靠它匹配任务，不要修改
     pnh_.param<std::string>("source_id", source_id_, "fuel_planner");
-    pnh_.param<std::string>("multisession/session", session_, "fresh");
+    // 多会话地图复用：session=fresh/save/load。任务结束（停止/返航到家/落地）时
+    // 保存栅格地图（occ_map.bin）与 LTAOM 点云先验，下次 session=load 时复用。
+    pnh_.param<std::string>("session", session_, "fresh");
     pnh_.param<std::string>("multisession/map_save_topic", map_save_topic_, "/save_occ_map");
-    pnh_.param("multisession/save_on_return", save_on_return_, true);
-    pnh_.param("multisession/save_on_stop", save_on_stop_, true);
-    pnh_.param("multisession/save_on_landing", save_on_landing_, true);
-    pnh_.param("multisession/ground_confirm_time", ground_confirm_time_, 1.5);
-    if (session_ != "fresh" && session_ != "save" && session_ != "load") {
-      throw std::invalid_argument("multisession/session must be one of fresh, save or load");
-    }
+    pnh_.param<std::string>("multisession/prior_save_param", prior_save_param_, "/save_prior_info");
+    pnh_.param<std::string>("multisession/descriptor_save_param", descriptor_save_param_,
+                            "/save_prior_descriptor");
+    pnh_.param("multisession/ground_confirm_time", ground_confirm_time_, 1.0);
     if (!std::isfinite(ground_confirm_time_) || ground_confirm_time_ < 0.0) {
       throw std::invalid_argument("multisession/ground_confirm_time must be finite and >= 0");
+    }
+    if (session_ != "fresh" && session_ != "save" && session_ != "load") {
+      throw std::invalid_argument("session must be one of fresh, save or load");
     }
     if (!(battery_threshold_ >= 0.0 && battery_threshold_ <= 1.0) ||
         battery_timeout_ <= 0.0 || initial_plan_timeout_ <= 0.0 ||
@@ -107,6 +135,7 @@ class MissionManager {
         !std::isfinite(return_planning_timeout_) || return_retry_interval_ <= 0.0 ||
         return_planning_timeout_ <= 0.0 ||
         position_tolerance_ <= 0.0 || speed_tolerance_ <= 0.0 || stable_time_ <= 0.0 ||
+        !std::isfinite(arrival_timeout_) || arrival_timeout_ <= 0.0 ||
         data_timeout_ <= 0.0 || !std::isfinite(status_log_period_) ||
         status_log_period_ <= 0.0 || source_id_.empty()) {
       throw std::invalid_argument("invalid mission manager parameters");
@@ -121,7 +150,7 @@ class MissionManager {
     command_pub_ = nh_.advertise<uav_mission_msgs::MissionCommand>("mission_command", 2, true);
     authorization_pub_ = nh_.advertise<uav_mission_msgs::TaskContext>("authorized_context", 2, true);
     status_pub_ = nh_.advertise<uav_mission_msgs::MissionStatus>("mission_status", 2, true);
-    save_map_pub_ = nh_.advertise<std_msgs::Empty>(map_save_topic_, 2, true);
+    save_map_pub_ = nh_.advertise<std_msgs::Empty>(map_save_topic_, 1, true);
     odom_sub_ = nh_.subscribe("odom", 10, &MissionManager::odomCallback, this);
     control_sub_ = nh_.subscribe("control_state", 10, &MissionManager::controlCallback, this);
     battery_sub_ = nh_.subscribe("battery", 10, &MissionManager::batteryCallback, this);
@@ -132,7 +161,6 @@ class MissionManager {
     start_srv_ = nh_.advertiseService("start", &MissionManager::start, this);
     stop_srv_ = nh_.advertiseService("stop", &MissionManager::stop, this);
     return_srv_ = nh_.advertiseService("return_home", &MissionManager::returnHome, this);
-    save_srv_ = nh_.advertiseService("save_map", &MissionManager::saveMap, this);
     timer_ = nh_.createTimer(ros::Duration(0.05), &MissionManager::timerCallback, this);
     publishAuthorization();
     publishStatus("mission manager ready");
@@ -164,6 +192,7 @@ class MissionManager {
     context_.task_type = type;
     context_.source_id = source_id_;
     task_started_ = ros::Time::now();
+    saved_maps_ = false;
     planner_stamp_ = ros::Time();
     explore_trajectory_ready_ = false;
     recovery_attempts_ = 0;
@@ -174,6 +203,7 @@ class MissionManager {
     settled_stamp_ = ros::Time();
     last_active_trajectory_ = 0;
     stable_since_ = ros::Time();
+    off_home_since_ = ros::Time();
     publishAuthorization();
   }
 
@@ -189,35 +219,20 @@ class MissionManager {
     command_pub_.publish(msg);
   }
 
-  // Multi-session map reuse: the occupancy grid itself is owned by the planner's
-  // map node, which persists it on this trigger (it is a no-op when the session
-  // has no save path configured). Saving at every mission end point means an
-  // aborted flight still leaves a usable prior behind.
-  void requestMapSave(const char* reason) {
-    if (session_ == "fresh") return;
-    const ros::Time now = ros::Time::now();
-    if (!last_map_save_.isZero() && now >= last_map_save_ &&
-        (now - last_map_save_).toSec() < 2.0) {
-      return;
-    }
-    last_map_save_ = now;
-    std_msgs::Empty trigger;
-    save_map_pub_.publish(trigger);
-    ROS_INFO("[MAP] save requested (%s) on %s (session=%s)", reason,
-             save_map_pub_.getTopic().c_str(), session_.c_str());
-  }
-
-  bool saveMap(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& response) {
-    last_map_save_ = ros::Time();
-    std_msgs::Empty trigger;
-    save_map_pub_.publish(trigger);
-    response.success = true;
-    response.message = session_ == "fresh"
-        ? "save requested, but a fresh session has no map_save_path configured"
-        : "occupancy map save requested on " + save_map_pub_.getTopic();
-    ROS_INFO("[MAP] manual save requested on %s (session=%s)", save_map_pub_.getTopic().c_str(),
-             session_.c_str());
-    return true;
+  // 任务结束时持久化两类地图，供下一次飞行续用。栅格地图由 MapROS 在保存话题上
+  // 写入；LTAOM 点云先验由 loop_optimization/std_loop 在对应参数翻转为 true 时写入
+  // （对应节点未运行时均为无操作）。
+  void saveSessionMaps() {
+    if (session_ == "fresh" || saved_maps_) return;
+    saved_maps_ = true;
+    std_msgs::Empty signal;
+    save_map_pub_.publish(signal);
+    // 两个独立触发：loop_optimization 写关键帧位姿+点云，std_loop 写描述子+面片。
+    nh_.setParam(prior_save_param_, true);
+    nh_.setParam(descriptor_save_param_, true);
+    ROS_INFO("Multi-session maps saved (session=%s, occupancy topic=%s, prior params=%s,%s)",
+             session_.c_str(), map_save_topic_.c_str(), prior_save_param_.c_str(),
+             descriptor_save_param_.c_str());
   }
 
   void publishStatus(const std::string& detail) {
@@ -240,37 +255,91 @@ class MissionManager {
     logFlightStatus(msg);
   }
 
+  // One console line: mission | FUEL planner | controller | battery. Normal
+  // fields stay short; abnormal ones carry their reason and the line turns
+  // into a warning, so a stalled exploration points at the failing layer.
   void logFlightStatus(const uav_mission_msgs::MissionStatus& status) {
+    using Planner = uav_mission_msgs::PlannerStatus;
     const ros::Time now = status.header.stamp;
+    const bool active = state_ == uav_mission_msgs::MissionStatus::EXPLORING || returning();
+
+    std::ostringstream mission;
+    mission << missionStateName(status.state);
+    if (status.return_reason != uav_mission_msgs::MissionStatus::REASON_NONE)
+      mission << " reason=" << missionReasonName(status.return_reason);
+    const bool recovering = status.recovery_reason != uav_mission_msgs::MissionStatus::REASON_NONE;
+    if (recovering)
+      mission << " recovery=" << missionReasonName(status.recovery_reason)
+              << " x" << status.recovery_attempts;
+
+    // FUEL alternates PLANNING/TRAJECTORY_READY/EXECUTING on every replan;
+    // they share one change class so normal replans do not print each time.
+    std::ostringstream fuel;
+    std::string fuel_class;
+    bool fuel_bad = false;
+    if (planner_stamp_.isZero()) {
+      const bool overdue = active && !fresh(task_started_, planner_status_timeout_);
+      fuel << (!active ? "IDLE" : overdue ? "NO_DATA" : "WAITING");
+      fuel_class = fuel.str();
+      fuel_bad = overdue;
+    } else {
+      const uint8_t s = planner_.state;
+      const bool running = s == Planner::PLANNING || s == Planner::TRAJECTORY_READY ||
+                           s == Planner::EXECUTING;
+      fuel << plannerStateName(s);
+      fuel_class = running ? "RUNNING" : plannerStateName(s);
+      if (s == Planner::FAILED) fuel << " x" << planner_.consecutive_failures;
+      fuel_bad = s == Planner::FAILED || s == Planner::OUTPUT_TIMEOUT ||
+                 s == Planner::TRAJECTORY_UNSAFE;
+      if (fuel_bad) fuel << " (" << planner_.detail << ")";
+      if (active && !fresh(planner_stamp_, planner_status_timeout_)) {
+        fuel << " STALE";
+        fuel_class += "/STALE";
+        fuel_bad = true;
+      }
+    }
+
     const bool control_fresh = fresh(control_stamp_, data_timeout_);
-    const std::string phase = control_fresh ? control_.phase : "NO_DATA_OR_STALE";
-    const std::string policy = control_fresh ? control_.output_policy : "NO_DATA_OR_STALE";
-    const std::string landing = control_fresh ? control_.landing_state : "NO_DATA_OR_STALE";
-    std::ostringstream key;
-    key << unsigned(status.state) << '/' << unsigned(status.return_reason) << '/'
-        << unsigned(status.recovery_reason) << '/' << status.context.mission_id << '/'
-        << phase << '/' << policy << '/' << landing << '/' << (control_fresh && control_.feedback_ready)
-        << '/' << status.battery_valid;
-    const bool changed = key.str() != last_log_key_;
-    if (!changed && !last_log_.isZero() && now >= last_log_ &&
-        (now - last_log_).toSec() < status_log_period_) return;
+    std::ostringstream ctrl;
+    bool ctrl_bad = !control_fresh;
+    if (!control_fresh) {
+      ctrl << "NO_DATA";
+    } else {
+      ctrl << control_.phase;
+      if (control_.output_policy != "CLOSED_LOOP") ctrl << '/' << control_.output_policy;
+      if (control_.phase != "TRAJECTORY") ctrl << '(' << control_.transition_reason << ')';
+      if (control_.landing_state != "IN_AIR") ctrl << " landing=" << control_.landing_state;
+      if (!control_.feedback_ready) ctrl << " feedback=NOT_READY";
+      ctrl_bad = !control_.feedback_ready ||
+                 (active && control_.output_policy != "CLOSED_LOOP");
+    }
+    const std::string ctrl_key = control_fresh
+        ? control_.phase + '/' + control_.output_policy + '/' + control_.landing_state + '/' +
+          (control_.feedback_ready ? "1" : "0")
+        : std::string("NO_DATA");
 
     std::ostringstream battery;
     if (status.battery_valid)
       battery << std::fixed << std::setprecision(1) << 100.0 * status.battery_percentage << '%';
     else
-      battery << "UNKNOWN_INVALID_OR_STALE";
-    ROS_INFO_STREAM("[FLIGHT_STATUS] mission=" << missionStateName(status.state)
-        << " | control=" << phase << '/' << policy
-        << " | landing=" << landing
-        << " | feedback=" << (control_fresh && control_.feedback_ready ? "READY" : "NOT_READY")
-        << " | battery=" << battery.str()
-        << " | low_battery_return=" << (battery_enabled_ ? "ON" : "OFF")
-        << "(threshold=" << 100.0 * battery_threshold_ << "%)"
-        << " | task_reason=" << missionReasonName(status.return_reason)
-        << " | recovery_reason=" << missionReasonName(status.recovery_reason)
-        << " | recovery_requests=" << status.recovery_attempts
-        << " | detail=" << status.detail);
+      battery << "NO_DATA";
+    const bool battery_bad = battery_enabled_ && !status.battery_valid;
+
+    std::ostringstream key;
+    key << unsigned(status.state) << '/' << unsigned(status.return_reason) << '/'
+        << unsigned(status.recovery_reason) << '/' << status.context.mission_id << '/'
+        << fuel_class << '/' << ctrl_key << '/' << status.battery_valid;
+    const bool changed = key.str() != last_log_key_;
+    if (!changed && !last_log_.isZero() && now >= last_log_ &&
+        (now - last_log_).toSec() < status_log_period_) return;
+
+    std::ostringstream line;
+    line << "[FLIGHT_STATUS] mission=" << mission.str() << " | fuel=" << fuel.str()
+         << " | ctrl=" << ctrl.str() << " | battery=" << battery.str();
+    if (fuel_bad || ctrl_bad || battery_bad || recovering)
+      ROS_WARN_STREAM(line.str());
+    else
+      ROS_INFO_STREAM(line.str());
     last_log_key_ = key.str();
     last_log_ = now;
   }
@@ -287,9 +356,6 @@ class MissionManager {
     state_ = uav_mission_msgs::MissionStatus::PREPARE_RETURN;
     publishCommand(uav_mission_msgs::MissionCommand::START);
     publishStatus(detail);
-    // Exploration has produced everything this flight will map before the
-    // return leg starts, so persist the grid now even if the return is aborted.
-    if (save_on_return_) requestMapSave("exploration ended / returning home");
     ROS_WARN("Return-home latched: reason=%u mission=%llu (%s)", reason,
              static_cast<unsigned long long>(context_.mission_id), detail.c_str());
   }
@@ -301,11 +367,14 @@ class MissionManager {
   }
 
   void recoverReturn(uint8_t reason, const std::string& detail, bool request_replan) {
+    const bool changed = state_ != uav_mission_msgs::MissionStatus::RETURN_RECOVERY ||
+                         recovery_reason_ != reason;
     state_ = uav_mission_msgs::MissionStatus::RETURN_RECOVERY;
     recovery_reason_ = reason;
     replan_requested_ = replan_requested_ || request_replan;
     publishStatus(detail);
-    ROS_WARN_THROTTLE(1.0, "Return recovery (same batch, retrying): %s", detail.c_str());
+    // Repeats while still recovering are covered by the status line.
+    if (changed) ROS_WARN("Return recovery (same batch, retrying): %s", detail.c_str());
   }
 
   bool start(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& response) {
@@ -338,12 +407,12 @@ class MissionManager {
   bool stop(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& response) {
     if (state_ != uav_mission_msgs::MissionStatus::READY) {
       publishCommand(uav_mission_msgs::MissionCommand::STOP);
+      saveSessionMaps();
     }
     state_ = uav_mission_msgs::MissionStatus::READY;
     return_reason_ = uav_mission_msgs::MissionStatus::STOP_REQUESTED;
     stable_since_ = ros::Time();
     publishStatus("mission explicitly stopped; hover requested");
-    if (save_on_stop_) requestMapSave("mission stopped");
     response.success = true;
     response.message = "Mission stopped; this request was not interpreted as return-home.";
     return true;
@@ -379,11 +448,20 @@ class MissionManager {
   void controlCallback(const uav_controller::FlightStatusConstPtr& msg) {
     control_ = *msg;
     control_stamp_ = ros::Time::now();
-    // Landing saves are only meaningful after a flight; the drone sits on the
-    // ground at startup too, and that must not overwrite the stored prior.
-    if (control_.landing_state == "IN_AIR" || control_.landing_state == "TAKING_OFF" ||
-        control_.landing_state == "LANDING") {
-      saw_airborne_ = true;
+    // 跟踪离地/落地状态，使手动降落（QGC land、AUTO.LAND 或任意下降）即便从未调用
+    // /fuel/stop 也仍会保存地图。落地状态做去抖：单次 EKF 抖动不会结束本次会话。
+    const ros::Time now = ros::Time::now();
+    if (control_.landing_state == "IN_AIR" || control_.landing_state == "LANDING") {
+      was_airborne_ = true;
+      ground_since_ = ros::Time();
+    } else if (control_.landing_state == "ON_GROUND" && was_airborne_) {
+      if (ground_since_.isZero() || now < ground_since_) {
+        ground_since_ = now;
+      } else if ((now - ground_since_).toSec() >= ground_confirm_time_) {
+        landed_ = true;
+      }
+    } else {
+      ground_since_ = ros::Time();
     }
   }
 
@@ -402,11 +480,18 @@ class MissionManager {
   void plannerCallback(const uav_mission_msgs::PlannerStatusConstPtr& msg) {
     if (!sameContext(msg->context, context_)) return;
     planner_stamp_ = ros::Time::now();
+    planner_ = *msg;
     if (returning()) {
       reference_settled_ = last_active_trajectory_ != 0 &&
                            msg->state == uav_mission_msgs::PlannerStatus::GOAL_REACHED &&
                            msg->trajectory_id == last_active_trajectory_;
-      if (reference_settled_) settled_stamp_ = planner_stamp_;
+      if (reference_settled_) {
+        settled_stamp_ = planner_stamp_;
+      } else {
+        // A withdrawn arrival restarts the whole stable time. The timer alone would miss a
+        // withdrawal and a new confirmation that both arrive between two of its ticks.
+        stable_since_ = ros::Time();
+      }
     }
     if (msg->state == uav_mission_msgs::PlannerStatus::TRAJECTORY_READY) {
       explore_trajectory_ready_ = true;
@@ -450,6 +535,7 @@ class MissionManager {
       reference_settled_ = false;
       settled_stamp_ = ros::Time();
       stable_since_ = ros::Time();
+      off_home_since_ = ros::Time();
       state_ = uav_mission_msgs::MissionStatus::RETURNING;
       replan_requested_ = false;
       recovery_reason_ = uav_mission_msgs::MissionStatus::REASON_NONE;
@@ -479,7 +565,19 @@ class MissionManager {
 
   void timerCallback(const ros::TimerEvent&) {
     const ros::Time now = ros::Time::now();
-    checkLandedSave();
+    // 落地即结束本次会话（无论由谁触发），在继续前持久化地图；先停掉 FUEL，避免
+    // 飞行器在地面时仍被持续下发轨迹。
+    if (landed_ && state_ != uav_mission_msgs::MissionStatus::READY &&
+        state_ != uav_mission_msgs::MissionStatus::HOME_HOLD) {
+      landed_ = false;
+      was_airborne_ = false;
+      publishCommand(uav_mission_msgs::MissionCommand::STOP);
+      saveSessionMaps();
+      state_ = uav_mission_msgs::MissionStatus::READY;
+      stable_since_ = ros::Time();
+      publishStatus("landed; maps saved");
+      ROS_INFO("Landing detected: exploration stopped and session maps saved");
+    }
     if (state_ == uav_mission_msgs::MissionStatus::EXPLORING) {
       if (battery_enabled_ && batteryValid() && battery_percentage_ < battery_threshold_) {
         beginReturn(uav_mission_msgs::MissionStatus::LOW_BATTERY,
@@ -509,14 +607,28 @@ class MissionManager {
                                              : "return planner status heartbeat timed out", true);
       }
       if (atHome()) {
+        off_home_since_ = ros::Time();
         if (stable_since_.isZero()) stable_since_ = now;
         if ((now - stable_since_).toSec() >= stable_time_) {
           state_ = uav_mission_msgs::MissionStatus::HOME_HOLD;
           publishCommand(uav_mission_msgs::MissionCommand::HOLD_HOME);
+          saveSessionMaps();
           publishStatus("MISSION_DONE: home reached and stable; holding home position");
         }
       } else {
         stable_since_ = ros::Time();
+        // FUEL does not replan a terminal segment by itself. If it finished with the aircraft
+        // elsewhere (e.g. the controller fell back to HOLD and ignores the same trajectory id),
+        // only a new trajectory from the measured state gets it moving again.
+        if (!reference_settled_ || !fresh(settled_stamp_, 1.0)) {
+          off_home_since_ = ros::Time();
+        } else if (off_home_since_.isZero()) {
+          off_home_since_ = now;
+        } else if ((now - off_home_since_).toSec() >= arrival_timeout_) {
+          off_home_since_ = ros::Time();
+          recoverReturn(uav_mission_msgs::MissionStatus::TRAJECTORY_TIMEOUT,
+                        "terminal trajectory finished but home was not reached", true);
+        }
       }
     }
     if (returning() && replan_requested_ &&
@@ -533,35 +645,24 @@ class MissionManager {
     }
   }
 
-  // A flight can also end by landing without ever reaching HOME_HOLD (operator
-  // AUTO.LAND, emergency). Save once the on-ground state has been confirmed.
-  void checkLandedSave() {
-    if (!save_on_landing_ || session_ == "fresh") return;
-    const bool on_ground = fresh(control_stamp_, data_timeout_) &&
-                           control_.landing_state == "ON_GROUND";
-    if (!on_ground || !saw_airborne_) {
-      ground_since_ = ros::Time();
-      return;
-    }
-    const ros::Time now = ros::Time::now();
-    if (ground_since_.isZero()) ground_since_ = now;
-    if ((now - ground_since_).toSec() < ground_confirm_time_) return;
-    requestMapSave("landing confirmed");
-    saw_airborne_ = false;
-  }
-
   ros::NodeHandle nh_, pnh_;
   ros::Publisher command_pub_, authorization_pub_, status_pub_, save_map_pub_;
   ros::Subscriber odom_sub_, control_sub_, battery_sub_, planner_sub_, trajectory_sub_,
       goal_sub_;
-  ros::ServiceServer start_srv_, stop_srv_, return_srv_, save_srv_;
+  ros::ServiceServer start_srv_, stop_srv_, return_srv_;
   ros::Timer timer_;
   nav_msgs::Odometry odom_;
   uav_controller::FlightStatus control_;
+  uav_mission_msgs::PlannerStatus planner_;  // Latest status of the current task.
   uav_mission_msgs::TaskContext context_;
   geometry_msgs::Point home_;
   ros::Time control_stamp_, battery_stamp_, task_started_, planner_stamp_, stable_since_, last_status_;
+  ros::Time off_home_since_;
+  double arrival_timeout_{5.0};
   std::string world_frame_, source_id_, detail_{"ready"};
+  std::string session_{"fresh"}, map_save_topic_{"/save_occ_map"},
+      prior_save_param_{"/save_prior_info"},
+      descriptor_save_param_{"/save_prior_descriptor"};
   std::string last_log_key_;
   ros::Time last_log_;
   double status_log_period_{2.0};
@@ -580,12 +681,10 @@ class MissionManager {
   uint8_t return_reason_{uav_mission_msgs::MissionStatus::REASON_NONE};
   bool battery_enabled_{true}, battery_sample_valid_{false};
   bool explore_trajectory_ready_{false};
-  // Multi-session map reuse.
-  std::string session_{"fresh"}, map_save_topic_{"/save_occ_map"};
-  ros::Time last_map_save_, ground_since_;
-  bool save_on_return_{true}, save_on_stop_{true}, save_on_landing_{true};
-  double ground_confirm_time_{1.5};
-  bool saw_airborne_{false};
+  bool saved_maps_{false};
+  bool was_airborne_{false}, landed_{false};
+  ros::Time ground_since_;
+  double ground_confirm_time_{1.0};
 };
 
 int main(int argc, char** argv) {

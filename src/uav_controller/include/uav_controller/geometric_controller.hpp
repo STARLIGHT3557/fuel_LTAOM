@@ -33,7 +33,7 @@ struct ControllerState {
   Eigen::Vector3d pos{Eigen::Vector3d::Zero()};      // ENU position [m]
   Eigen::Vector3d vel{Eigen::Vector3d::Zero()};      // ENU velocity [m/s]
   Eigen::Quaterniond quat{Eigen::Quaterniond::Identity()};  // FLU-in-ENU attitude
-  double az_specific_up{9.81};    // world-up specific force [m/s^2] for thrust est
+  double az_body{9.81};           // body-z specific force [m/s^2] for thrust est
 };
 
 struct ControllerSetpoint {
@@ -69,7 +69,8 @@ public:
   const ControllerParams &params() const { return params_; }
 
 private:
-  // RLS update of thr2acc_ from the measured world-up specific force.
+  // RLS update of thr2acc_ from the measured body-z specific force; the
+  // estimated hover throttle g/thr2acc_ is clamped to [0.1, 0.8].
   bool estimateThrustModel(double est_a_z, double now_sec);
 
   static Eigen::Matrix3d quat2RotMatrix(const Eigen::Vector4f &q);

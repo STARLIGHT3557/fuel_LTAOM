@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>prometheus_fuel</name>
+  <name>fuel_bridge</name>
   <version>0.1.0</version>
   <description>FUEL exploration integration for the Prometheus MID360 / PX4 real-flight stack.</description>
   <maintainer email="maintainer@example.com">Prometheus maintainers</maintainer>
@@ -26,7 +26,6 @@
   <test_depend>rospy</test_depend>
   <test_depend>rostest</test_depend>
   <depend>active_perception</depend>
-  <depend>plan_env</depend>
   <exec_depend>mavros</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>

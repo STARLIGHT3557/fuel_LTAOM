@@ -14,8 +14,7 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from uav_controller.msg import FlightStatus, TrajectorySetpoint
-from uav_mission_msgs.msg import (ControllerAck, MissionStatus, PlannerStatus,
-                                 TrajectoryStatus)
+from uav_mission_msgs.msg import MissionStatus, PlannerStatus
 
 
 class PersistentReturnPlannerTest(unittest.TestCase):
@@ -28,12 +27,11 @@ class PersistentReturnPlannerTest(unittest.TestCase):
         self.fail(message)
 
     def test_map_recovery(self):
-        statuses, planning, handoffs, commands, maps, splines = [], [], [], [], [], []
+        statuses, planning, commands, maps, splines = [], [], [], [], []
         subscribers = [
             rospy.Subscriber("/planning/bspline", Bspline, splines.append),
             rospy.Subscriber('/fuel/mission_status', MissionStatus, statuses.append),
             rospy.Subscriber('/fuel/planner_status', PlannerStatus, planning.append),
-            rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, handoffs.append),
             rospy.Subscriber('/uav_controller/trajectory_setpoint', TrajectorySetpoint, commands.append),
             rospy.Subscriber('/sdf_map/occupancy_all', PointCloud2, maps.append),
         ]
@@ -41,7 +39,6 @@ class PersistentReturnPlannerTest(unittest.TestCase):
         cloud_pub = rospy.Publisher('/fuel_test/cloud', PointCloud2, queue_size=2)
         state_pub = rospy.Publisher('/uav_controller/fsm_status', FlightStatus, queue_size=2)
         battery_pub = rospy.Publisher('/fuel_test/battery', BatteryState, queue_size=2)
-        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=5)
         blocked = [True]
         began = time.monotonic()
         pitch_c, pitch_s = math.cos(0.35), math.sin(0.35)
@@ -61,7 +58,9 @@ class PersistentReturnPlannerTest(unittest.TestCase):
             odom.pose.pose.position.z = height
             odom.pose.pose.orientation.w = 1.0
             odom_pub.publish(odom)
-            state_pub.publish(FlightStatus(feedback_ready=True, output_policy='CLOSED_LOOP', phase='HOLD'))
+            # Report flying: this odometry never follows the trajectory, and the bridge refuses
+            # references that move away from a hovering aircraft.
+            state_pub.publish(FlightStatus(feedback_ready=True, output_policy='CLOSED_LOOP', phase='TRAJECTORY'))
             battery_pub.publish(BatteryState(header=Header(stamp=stamp), percentage=0.31))
             points = []
             for x, y, z, dx, dz in directions:
@@ -80,10 +79,6 @@ class PersistentReturnPlannerTest(unittest.TestCase):
                 points.append((distance*x, distance*y, distance*z))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id='lidar_link'), points))
-            if handoffs and handoffs[-1].state == TrajectoryStatus.PENDING:
-                item = handoffs[-1]
-                ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=item.context,
-                                              trajectory_id=item.trajectory_id, accepted=True))
 
         timer = rospy.Timer(rospy.Duration(0.1), feed)
         try:
@@ -91,19 +86,17 @@ class PersistentReturnPlannerTest(unittest.TestCase):
             self.wait_for(lambda: time.monotonic()-began > 5 and statuses and statuses[-1].battery_valid
                           and any(m.width for m in maps), 'synthetic wall/map was not ready')
             self.assertTrue(rospy.ServiceProxy('/fuel/return_home', Trigger)().success)
-            self.wait_for(lambda: any(s.consecutive_failures >= 6 for s in planning),
-                          'FUEL stopped retrying after a failure count')
-            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURN_RECOVERY,
-                          'manager abandoned or failed to report continuing return recovery')
+            self.wait_for(lambda: any(s.state == PlannerStatus.OBSERVING_HOME for s in planning),
+                          'no observation heartbeat at blocked home')
             context = copy.deepcopy(statuses[-1].context)
             self.assertEqual(statuses[-1].return_reason, MissionStatus.MANUAL_RETURN)
-            blocked[0] = False  # Fresh free-space rays remove the obstacle from the same map.
-            self.wait_for(lambda: any(c.context == context and not c.finished for c in commands),
-                          'FUEL did not resume the same return task after the map became traversable', 30)
-            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING,
-                          'recovered execution was not acknowledged')
-            self.assertEqual(statuses[-1].context, context)
-            terminal = next(b for b in splines if b.context == context)
+            blocked[0] = False
+            def home_splines():
+                return [b for b in splines if b.context == context and
+                        all(abs(p.x - 3.0) < 1e-6 and abs(p.y) < 1e-6 and abs(p.z - 1.0) < 1e-6
+                            for p in b.pos_pts[-3:])]
+            self.wait_for(home_splines, 'return to the original home was not planned', 30)
+            terminal = home_splines()[-1]
             self.assertGreaterEqual(terminal.knots[-terminal.order-1] - terminal.knots[terminal.order], 2.0)
             # Repeated final control points enforce exact home and zero v/a.
             for point in terminal.pos_pts[-3:]:
@@ -114,6 +107,28 @@ class PersistentReturnPlannerTest(unittest.TestCase):
                 self.assertAlmostEqual(heading, 0.0, places=6)
             self.assertTrue(any(s.context == context and s.state == PlannerStatus.TRAJECTORY_READY
                                 for s in planning))
+
+            # Home blocked after the terminal segment: the arrival is withdrawn on the same
+            # trajectory, replanning waits out map noise, and home is retried until it clears.
+            self.wait_for(lambda: planning[-1].state == PlannerStatus.GOAL_REACHED,
+                          'terminal trajectory did not finish', 30)
+            finished = planning[-1].trajectory_id
+            checkpoint = len(planning)
+            blocked[0] = True
+            self.wait_for(lambda: any(s.state == PlannerStatus.OBSERVING_HOME
+                                      for s in planning[checkpoint:]), 'blocked home was not observed', 30)
+            withdrawn = next(s for s in planning[checkpoint:] if s.state == PlannerStatus.EXECUTING
+                             and 'waiting for home' in s.detail)
+            replacement = next(s for s in planning[checkpoint:]
+                               if s.state == PlannerStatus.TRAJECTORY_READY)
+            self.assertEqual(withdrawn.trajectory_id, finished)
+            self.assertGreaterEqual((replacement.header.stamp - withdrawn.header.stamp).to_sec(), 0.45,
+                                    'map noise would replan the terminal segment')
+            blocked[0] = False
+            self.wait_for(lambda: any(s.state == PlannerStatus.TRAJECTORY_READY
+                                      for s in planning[checkpoint:]), 'home was not retried after it cleared')
+            self.wait_for(lambda: any(s.state == PlannerStatus.GOAL_REACHED and s.trajectory_id > finished
+                                      for s in planning[checkpoint:]), 'new terminal trajectory did not finish', 30)
             self.assertTrue(rospy.ServiceProxy('/fuel/stop', Trigger)().success)
         finally:
             timer.shutdown()
@@ -121,4 +136,4 @@ class PersistentReturnPlannerTest(unittest.TestCase):
 
 if __name__ == '__main__':
     rospy.init_node('test_return_planner')
-    rostest.rosrun('prometheus_fuel', 'persistent_return_planner', PersistentReturnPlannerTest)
+    rostest.rosrun('fuel_bridge', 'persistent_return_planner', PersistentReturnPlannerTest)

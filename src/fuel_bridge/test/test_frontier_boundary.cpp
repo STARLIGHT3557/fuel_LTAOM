@@ -137,6 +137,26 @@ TEST_F(FrontierBoundaryTest, VisibilityUsesFullMountRotation) {
   EXPECT_FALSE(sensor.insideFOV(sensor.getSensorPosition() + rotation * Eigen::Vector3d(1, 0, 1)));
 }
 
+TEST_F(FrontierBoundaryTest, VisibilityFollowsCameraViewCrop) {
+  // Earlier tests leave mount parameters on the server; use a level mount.
+  for (const char* name : {"lidar_x", "lidar_y", "lidar_z", "lidar_roll", "lidar_pitch", "lidar_yaw"})
+    nh_.setParam(std::string("perception_utils/") + name, 0.0);
+  nh_.setParam("perception_utils/lidar_min_elevation", -0.5);
+  nh_.setParam("perception_utils/lidar_max_elevation", 0.9);
+  nh_.setParam("view_crop/enabled", true);
+  nh_.setParam("view_crop/horizontal_fov_deg", 80.0);
+  PerceptionUtils sensor(nh_);
+  nh_.deleteParam("view_crop");
+  const Eigen::Vector3d body(0, 0, 1.5);
+  sensor.setPose(body, M_PI_2);  // Nose toward +y.
+  EXPECT_TRUE(sensor.insideFOV(body + Eigen::Vector3d(0.5, 2, 0)));    // 14 deg off the nose
+  EXPECT_FALSE(sensor.insideFOV(body + Eigen::Vector3d(-2, 0.5, 0)));  // left side
+  EXPECT_FALSE(sensor.insideFOV(body + Eigen::Vector3d(0, -2, 0)));    // behind
+  // Elevation is not cropped: only the LiDAR's own -0.5..0.9 rad applies.
+  EXPECT_TRUE(sensor.insideFOV(body + Eigen::Vector3d(0, 2, 1)));      // 27 deg up
+  EXPECT_FALSE(sensor.insideFOV(body + Eigen::Vector3d(0, 1, 2)));     // 63 deg up
+}
+
 int main(int argc, char** argv) {
   ros::init(argc, argv, "fuel_frontier_boundary");
   testing::InitGoogleTest(&argc, argv);

@@ -1,0 +1,8 @@
+<launch>
+    <arg name="multisession_mode" default="0"/>
+    <param name="multisession_mode" type="int" value="$(arg multisession_mode)"/>
+    <param name="SaveDir" type="string" value="$(env HOME)/fuel_sim_logs/ltaom/"/>
+    <rosparam command="load" file="$(find loop_optimization)/launch/loopopt_config_avia.yaml" />
+    <param name="lcd_config_path" type="string" value="$(find std_loop)/config/config_avia.yaml" />
+    <node pkg="nodelet" type="nodelet" args="standalone std_loop/loop_detection_plugin" name="loop_detection" output="screen"/>
+</launch>

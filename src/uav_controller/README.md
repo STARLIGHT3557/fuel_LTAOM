@@ -13,8 +13,8 @@ ROS 1/MAVROS position controller with a ROS-free flight state machine and geomet
 
 The state machine exposes `WAIT`, `TAKEOFF`, `HOVER_BEFORE`, `TRAJECTORY`, `HOLD`, and `FEEDBACK_LOST`.
 
-- Normal mission mode can generate a smooth vertical takeoff, wait at the takeoff target, and then accept an external trajectory.
-- `fsm/direct_trajectory=true` is intended for planners such as FUEL. An airborne OFFBOARD entry holds the measured pose; the first fresh external setpoint starts trajectory tracking. Completion or timeout returns to HOLD.
+- Normal mission mode can spool the motors up (`fsm/spool_time`), generate a smooth vertical takeoff, wait at the takeoff target, and then accept an external trajectory.
+- `fsm/direct_trajectory=true` is intended for planners such as FUEL. An airborne OFFBOARD entry holds the measured pose, while a ground entry first performs the takeoff above; the first fresh external setpoint starts trajectory tracking. Completion or timeout returns to HOLD.
 - `fsm/position_step=true` is a manual test mode. After manual takeoff, entering OFFBOARD immediately applies the configured absolute ENU target.
 
 References contain position, velocity, acceleration, and yaw. The controller publishes a desired attitude quaternion and normalized collective thrust to `/mavros/setpoint_raw/attitude`; PX4 retains the attitude-rate and actuator inner loops.
@@ -48,7 +48,7 @@ The FUEL integration launches `geometric_controller.launch` with configurable re
 | `/uav_controller/fsm_status` | `uav_controller/FlightStatus` | State, transition reason, output policy, and feedback health |
 | `/mavros/setpoint_raw/attitude` | `mavros_msgs/AttitudeTarget` | Desired attitude and thrust |
 
-All controller math uses local ENU position and FLU attitude conventions. Mission IDs, finite-value checks, feedback freshness, trajectory timeouts, clock-discontinuity handling, and recovery dwell time prevent stale or invalid data from continuing a mission.
+All controller math uses local ENU position and FLU attitude conventions. Mission IDs, finite-value checks, trajectory timeouts, clock-discontinuity handling, and recovery dwell time prevent invalid data from continuing a mission. Feedback is valid once MAVROS is connected and pose and velocity have been received; feedback timestamps are not checked for age.
 
 ## Tests
 

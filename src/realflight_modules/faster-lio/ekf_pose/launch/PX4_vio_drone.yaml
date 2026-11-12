@@ -1,7 +1,8 @@
-# Translation NOT CALIBRATED for this aircraft.
-# tr_i is output-body origin in flight-controller IMU coordinates.
-# Match launch imu_trans_* to the same vector when body and IMU axes align.
-Rr_i:       [1, 0, 0, 0]     #ekf bag     #[1, 0, 0, 0] #car   #quaterniod(w,x,y,z)  
+# EKF 参数：融合 MID360 内置 IMU（/livox/imu）与 LIO 里程计，输出 /mavros/vision_pose/pose。
+# 平移未针对本机标定。
+# tr_i 为输出机体原点在 EKF 所用 IMU 坐标系中的位置（m）；机体与 IMU 坐标轴对齐时，
+# ekf_lidar.launch 中的 imu_trans_* 应填同一向量，并与 mid360.yaml 的 imu_body_T 对应。
+Rr_i:       [1, 0, 0, 0]     #ekf bag     #[1, 0, 0, 0] #car   #quaterniod(w,x,y,z)
 # tr_i:       [0.0, 0.0, 0.1] #ekf bag     #[0, 0, 0.]   #cars
 tr_i:       [0.0, 0.0, 0.0] #ekf bag     #[0, 0, 0.]   #cars
 
@@ -10,7 +11,7 @@ tr_i:       [0.0, 0.0, 0.0] #ekf bag     #[0, 0, 0.]   #cars
 
 # Livox 加速度单位为 g；当前 EKF 重力常数使用 9.8       rui
 scale_g: 9.8
-# rotation form imu to virtual body
+# IMU 到机体的旋转（雷达安装角度，当前绕 y 轴 15°），必须与 mid360.yaml 的 imu_body_R 一致。
 # rotation_imu:  [ 1, 0, 0,
 #                  0, 1, 0,
 #                  0, 0, 1]

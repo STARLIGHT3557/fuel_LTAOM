@@ -50,7 +50,11 @@ class FuelBridge {
   Eigen::Vector3d bounds_min_, bounds_max_;
   bool have_bounds_ = false;
   std::string world_frame_, lidar_frame_, cloud_frame_, source_id_;
-  double min_range_, data_timeout_, command_timeout_, planning_timeout_;
+  double min_range_, data_timeout_, command_timeout_, planning_timeout_, reference_jump_limit_;
+  ros::Time last_jump_report_;
+  // Camera view crop of the exploration map input (config/view_crop.yaml).
+  bool view_crop_ = false;
+  double crop_half_horizontal_ = M_PI;
   bool active_ = false;
   bool timeout_reported_ = false;
   uint64_t trajectory_id_ = 0;
@@ -61,6 +65,16 @@ class FuelBridge {
   bool fresh(const ros::Time& stamp, double timeout) const {
     const double age = (ros::Time::now() - stamp).toSec();
     return !stamp.isZero() && age >= -0.05 && age < timeout;
+  }
+
+  // Azimuth of a direction from the LiDAR origin, relative to the heading of a
+  // gimbal that follows aircraft yaw. Elevation is left to the LiDAR's own FOV.
+  // FUEL's PerceptionUtils applies the same test to candidate viewpoints.
+  bool insideViewCrop(const Eigen::Vector3d& direction, double heading) const {
+    const double c = std::cos(heading), s = std::sin(heading);
+    const double forward = c * direction.x() + s * direction.y();
+    const double left = -s * direction.x() + c * direction.y();
+    return std::abs(std::atan2(left, forward)) <= crop_half_horizontal_;
   }
 
   void publishModel(const nav_msgs::Odometry& odom) const {
@@ -195,9 +209,17 @@ class FuelBridge {
     const Eigen::Matrix3d rotation = q.normalized().toRotationMatrix();
     const Eigen::Vector3d origin = position + rotation * lidar_translation_;
     const Eigen::Matrix3d sensor_rotation = rotation * lidar_rotation_;
+    // Only the exploration task maps through the camera view. Before a task
+    // and while returning, 360-degree input keeps the takeoff area and the
+    // way home known, which return planning requires.
+    const bool crop = view_crop_ &&
+        context_.task_type == uav_mission_msgs::TaskContext::EXPLORE &&
+        !(have_closed_context_ && sameContext(closed_context_, context_));
+    const double heading = std::atan2(rotation(1, 0), rotation(0, 0));
     pcl::PointCloud<pcl::PointXYZ> input, output, hits;
     pcl::fromROSMsg(*cloud, input);
     output.reserve(input.size());
+    bool measured = false;
     for (const auto& point : input) {
       Eigen::Vector3d p(point.x, point.y, point.z);
       if (!p.allFinite()) continue;
@@ -205,10 +227,15 @@ class FuelBridge {
       // origin differs from the LiDAR ray origin used for range filtering.
       const Eigen::Vector3d body_point = cloud_translation_ + cloud_rotation_ * p;
       if ((body_point - lidar_translation_).norm() < min_range_) continue;
+      measured = true;
       const Eigen::Vector3d w = position + rotation * body_point;
+      if (crop && !insideViewCrop(w - origin, heading)) continue;
       output.push_back(pcl::PointXYZ(w.x(), w.y(), w.z()));
       hits.push_back(output.back());
     }
+    // 点云新鲜度只看雷达是否有有效回波；视野裁剪后为空不算数据中断，
+    // 否则机头前方空旷时会被误判为输入超时而触发悬停和返航。
+    if (measured) cloud_stamp_ = cloud->header.stamp;
     if (output.empty()) return;
     sensor_msgs::PointCloud2 result;
     pcl::toROSMsg(output, result);
@@ -231,7 +258,6 @@ class FuelBridge {
     pcl::toROSMsg(hits, hits_msg);
     hits_msg.header = result.header;
     hits_pub_.publish(hits_msg);
-    cloud_stamp_ = cloud->header.stamp;
   }
 
   bool start(const uav_mission_msgs::MissionCommand& command) {
@@ -240,7 +266,9 @@ class FuelBridge {
       return true;
     }
     if (active_ && sameContext(context_, command.context)) return true;
-    if (!inBounds(odom_.pose.pose.position)) {
+    // The box limits exploration. Returning is exactly how an aircraft that left it gets back.
+    if (command.context.task_type != uav_mission_msgs::TaskContext::RETURN_HOME &&
+        !inBounds(odom_.pose.pose.position)) {
       ROS_ERROR("Mission rejected: current position is outside the exploration box.");
       return true;
     }
@@ -340,6 +368,11 @@ class FuelBridge {
   }
 
   void missionCallback(const uav_mission_msgs::MissionCommandConstPtr& msg) {
+    // A START still waiting for ready() opens the bridge by itself. Letting a REPLAN of the same
+    // task replace it would lose the task: this bridge never adopts it and drops all its commands.
+    if (msg->command == uav_mission_msgs::MissionCommand::REPLAN && have_mission_command_ &&
+        last_mission_command_.command == uav_mission_msgs::MissionCommand::START &&
+        sameContext(last_mission_command_.context, msg->context)) return;
     last_mission_command_ = *msg;
     have_mission_command_ = true;
     if (handleMissionCommand(*msg)) have_mission_command_ = false;
@@ -349,6 +382,18 @@ class FuelBridge {
     authorization_ = *msg;
     if (have_mission_command_ && handleMissionCommand(last_mission_command_))
       have_mission_command_ = false;
+  }
+
+  // FUEL keeps advancing its own trajectory while this bridge is closed or the controller holds,
+  // so its reference can be metres away by the time it is forwarded again. A controller that is
+  // not following a trajectory would fly straight at it, past any obstacle. While following one,
+  // a growing distance is ordinary tracking error and must not interrupt the flight.
+  bool referenceJumps(const quadrotor_msgs::PositionCommand& msg) const {
+    if (!last_command_.isZero() && state_.phase != "HOLD") return false;
+    const auto& aircraft = odom_.pose.pose.position;
+    const Eigen::Vector3d offset(msg.position.x - aircraft.x, msg.position.y - aircraft.y,
+                                 msg.position.z - aircraft.z);
+    return offset.norm() > reference_jump_limit_;
   }
 
   void commandCallback(const quadrotor_msgs::PositionCommandConstPtr& msg) {
@@ -362,6 +407,18 @@ class FuelBridge {
                         msg->acceleration.x, msg->acceleration.y, msg->acceleration.z,
                         msg->yaw, msg->yaw_dot}) {
       if (!std::isfinite(value)) return;
+    }
+    if (referenceJumps(*msg)) {
+      // Reported until a new trajectory arrives: mission_manager answers with a REPLAN, which
+      // makes FUEL plan from the measured state, or with a return if this was exploration.
+      if (!fresh(last_jump_report_, 0.5)) {
+        ROS_WARN("Refusing a reference more than %.2f m from the aircraft; waiting for a replan",
+                 reference_jump_limit_);
+        publishPlannerStatus(uav_mission_msgs::PlannerStatus::OUTPUT_TIMEOUT,
+                             "reference too far from the aircraft; replanning from its position");
+        last_jump_report_ = ros::Time::now();
+      }
+      return;
     }
     uav_controller::TrajectorySetpoint cmd;
     cmd.header = msg->header;
@@ -379,16 +436,22 @@ class FuelBridge {
   }
 
 public:
+  // 参数取自 bridge.yaml、mission.yaml、view_crop.yaml 和自动生成的 sensor_config，
+  // 说明见 docs/REALFLIGHT_PARAMETERS.md。
   FuelBridge() {
-    pnh_.param<std::string>("world_frame", world_frame_, "world");
+    pnh_.param<std::string>("world_frame", world_frame_, "world");  // 须与 MAVROS 里程计一致
     pnh_.param<std::string>("lidar_frame", lidar_frame_, "lidar_link");
-    pnh_.param<std::string>("cloud_frame", cloud_frame_, lidar_frame_);
+    pnh_.param<std::string>("cloud_frame", cloud_frame_, lidar_frame_);  // 输入点云坐标系
     pnh_.param<std::string>("source_id", source_id_, "fuel_planner");
     if (source_id_.empty()) throw std::invalid_argument("source_id must not be empty");
-    pnh_.param("min_range", min_range_, 0.6);
-    pnh_.param("data_timeout", data_timeout_, 0.5);
-    pnh_.param("command_timeout", command_timeout_, 0.5);
-    pnh_.param("planning_timeout", planning_timeout_, 10.0);
+    pnh_.param("min_range", min_range_, 0.6);              // 近距离滤除半径（m），去掉机架和桨叶
+    pnh_.param("data_timeout", data_timeout_, 0.5);        // 点云/里程计/控制器状态新鲜度（s）
+    pnh_.param("command_timeout", command_timeout_, 0.5);  // 规划指令中断多久请求悬停（s）
+    pnh_.param("planning_timeout", planning_timeout_, 10.0);  // 任务开始后等待首条指令（s）
+    pnh_.param("reference_jump_limit", reference_jump_limit_, 0.75);  // 未跟随轨迹时参考点离飞机的上限（m）
+    if (!std::isfinite(reference_jump_limit_) || reference_jump_limit_ <= 0.0)
+      throw std::invalid_argument("reference_jump_limit must be positive");
+    // 雷达安装位置和角度（机体系），由 prepare_realflight.py 从 mid360.yaml 生成
     double roll, pitch, yaw;
     pnh_.param("lidar_x", lidar_translation_.x(), 0.0);
     pnh_.param("lidar_y", lidar_translation_.y(), 0.0);
@@ -399,6 +462,8 @@ public:
     lidar_rotation_ = (Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
                        Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
                        Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX())).toRotationMatrix();
+    // 输入点云坐标系到机体系的外参。Faster-LIO 点云在其 IMU 系，与雷达原点不同，
+    // 同样由 prepare_realflight.py 生成；未提供时视为与雷达坐标系相同。
     cloud_translation_ = lidar_translation_;
     cloud_rotation_ = lidar_rotation_;
     std::vector<double> cloud_translation, cloud_rotation;
@@ -419,6 +484,15 @@ public:
         std::abs(cloud_rotation_.determinant() - 1.0) > 1e-5 ||
         !std::isfinite(min_range_) || min_range_ < 0.0 || cloud_frame_.empty() || world_frame_.empty())
       throw std::invalid_argument("Invalid cloud/LiDAR extrinsics or frame configuration");
+    // 相机视野裁剪：探索任务期间只把机头两侧 horizontal_fov_deg/2 以内的点写入地图
+    double crop_horizontal_deg;
+    pnh_.param("view_crop/enabled", view_crop_, false);
+    pnh_.param("view_crop/horizontal_fov_deg", crop_horizontal_deg, 360.0);
+    if (!(crop_horizontal_deg > 0.0 && crop_horizontal_deg <= 360.0))
+      throw std::invalid_argument("view_crop/horizontal_fov_deg must be in (0, 360]");
+    crop_half_horizontal_ = 0.5 * crop_horizontal_deg * M_PI / 180.0;
+    if (view_crop_)
+      ROS_INFO("Exploration map input limited to %.0f deg around the nose", crop_horizontal_deg);
     configureBounds();
     cloud_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_world", 2);
     hits_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("cloud_hits_world", 2);

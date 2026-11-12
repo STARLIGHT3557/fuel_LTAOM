@@ -1,21 +1,19 @@
 <launch>
   <group ns="fuel">
-    <node pkg="prometheus_fuel" type="mission_manager_node" name="mission_manager" required="true">
-      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+    <node pkg="fuel_bridge" type="mission_manager_node" name="mission_manager" required="true">
+      <rosparam command="load" file="$(find fuel_bridge)/config/mission.yaml"/>
       <param name="return_home/retry_interval" value="0.1"/>
       <param name="return_home/planning_timeout" value="1.0"/>
     </node>
-    <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" required="true">
-      <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
-      <rosparam command="load" file="$(find prometheus_fuel)/test/sensor_fixture.yaml"/>
+    <node pkg="fuel_bridge" type="fuel_bridge" name="bridge" required="true">
+      <rosparam command="load" file="$(find fuel_bridge)/config/bridge.yaml"/>
+      <rosparam command="load" file="$(find fuel_bridge)/test/sensor_fixture.yaml"/>
       <param name="planning_timeout" value="0.3"/>
     </node>
   </group>
   <node pkg="plan_manage" type="traj_server" name="recovery_traj_server" required="true">
-    <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
-    <param name="odom_twist_in_body" value="true"/>
     <remap from="/position_cmd" to="/fuel/position_cmd"/>
     <remap from="/odom_world" to="/fuel/odom"/>
   </node>
-  <test test-name="return_recovery_contract" pkg="prometheus_fuel" type="test_return_recovery.py" time-limit="35"/>
+  <test test-name="return_recovery_contract" pkg="fuel_bridge" type="test_return_recovery.py" time-limit="35"/>
 </launch>

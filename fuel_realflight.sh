@@ -10,7 +10,7 @@ for fuel_arg in "$@"; do
     *) fuel_launch_args+=("$fuel_arg") ;;
   esac
 done
-for fuel_node in prometheus_fuel/fuel_bridge prometheus_fuel/mission_manager_node uav_controller/geometric_controller_node exploration_manager/exploration_node plan_manage/traj_server; do
+for fuel_node in fuel_bridge/fuel_bridge fuel_bridge/mission_manager_node uav_controller/geometric_controller_node exploration_manager/exploration_node plan_manage/traj_server; do
   if [[ ! -x "$fuel_root/devel/fuel/lib/$fuel_node" ]]; then
     echo "Build incomplete ($fuel_node missing); run bash compile_fuel.sh." >&2
     exit 1
@@ -19,4 +19,4 @@ done
 fuel_sensor_config=$(mktemp "$FUEL_TSP_DIR/sensor.XXXXXX.yaml")
 python3 "$fuel_root/src/fuel_bridge/scripts/prepare_realflight.py" "$fuel_lio_config" "$fuel_sensor_config"
 echo "Reusing onboard MAVROS and FAST-LIO. Start both before exploration."
-exec roslaunch prometheus_fuel realflight.launch sensor_config:="$fuel_sensor_config" "${fuel_launch_args[@]}"
+exec roslaunch fuel_bridge realflight.launch sensor_config:="$fuel_sensor_config" "${fuel_launch_args[@]}"

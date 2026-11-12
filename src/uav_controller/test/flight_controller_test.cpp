@@ -880,6 +880,152 @@ TEST(FlightController, StageTimeoutParametersMustBeFiniteAndPositive) {
   }
 }
 
+TEST(TakeoffSpool, RampsThrustOpenLoopThenStartsTheProfile) {
+  auto params = flightParams();
+  params.spool_time = 3.0;
+  FlightHarness h(params);
+  const double start_z = h.input.state.pos.z();
+  const double ramp_end = 0.8 * controlParams().hover_percentage;
+  // Parked on a slope: the ramp must not command the aircraft level.
+  h.input.state.quat = Eigen::Quaterniond(Eigen::AngleAxisd(0.1, Eigen::Vector3d::UnitX()));
+  h.engage();
+  ASSERT_EQ(h.output.phase, uc::FlightPhase::TAKEOFF);
+  EXPECT_EQ(h.output.output_policy, uc::OutputPolicy::CLOSED_LOOP);
+  EXPECT_DOUBLE_EQ(h.output.command.thrust, 0.0);
+  for (int i = 1; i < 299; ++i) {
+    h.tick();
+    EXPECT_NEAR(h.output.command.thrust, ramp_end * i * 0.01 / params.spool_time, 1e-9);
+    EXPECT_NEAR(h.output.command.q.angularDistance(h.input.state.quat), 0.0, 1e-7);
+    EXPECT_DOUBLE_EQ(h.output.reference.pos.z(), start_z);
+    EXPECT_DOUBLE_EQ(h.output.reference.vel.z(), 0.0);
+  }
+  for (int i = 0; i < 3; ++i) h.tick();
+  // Closed loop takes over near hover and the profile only now starts.
+  EXPECT_GT(h.output.command.thrust, ramp_end);
+  EXPECT_NEAR(h.output.command.thrust, controlParams().hover_percentage + 0.01, 0.02);
+  EXPECT_NEAR(h.output.reference.pos.z(), start_z, 1e-3);
+  const double duration = 1.875 * (params.takeoff_height - start_z) / params.takeoff_speed;
+  for (int i = 0; i < static_cast<int>(0.5 * duration / 0.01); ++i) h.tick();
+  EXPECT_NEAR(h.output.reference.pos.z(), 0.5 * (start_z + params.takeoff_height), 0.02);
+}
+
+TEST(TakeoffSpool, EarlyLiftoffHandsOverToClosedLoop) {
+  auto params = flightParams();
+  params.spool_time = 3.0;
+  FlightHarness h(params);
+  const double start_z = h.input.state.pos.z();
+  h.engage();
+  for (int i = 0; i < 50; ++i) h.tick();
+  const double ramp = h.output.command.thrust;
+  ASSERT_LT(ramp, 0.1);
+  h.input.state.pos.z() += 0.09;
+  h.tick();
+  EXPECT_LT(h.output.command.thrust, 0.1) << "A small rise stays on the ramp";
+  h.input.state.pos.z() = start_z + 0.11;
+  h.tick();
+  EXPECT_NEAR(h.output.command.thrust, 0.63, 0.02);
+  EXPECT_DOUBLE_EQ(h.output.reference.pos.z(), start_z);
+}
+
+TEST(TakeoffSpool, OffboardExitCutsThrustAndDoesNotRestartTakeoff) {
+  auto params = flightParams();
+  params.spool_time = 3.0;
+  FlightHarness h(params);
+  h.engage();
+  for (int i = 0; i < 100; ++i) h.tick();
+  ASSERT_GT(h.output.command.thrust, 0.0);
+  h.input.offboard = false;
+  h.tick();
+  EXPECT_EQ(h.output.phase, uc::FlightPhase::WAIT);
+  EXPECT_EQ(h.output.output_policy, uc::OutputPolicy::ZERO_THRUST);
+  EXPECT_DOUBLE_EQ(h.output.command.thrust, 0.0);
+  h.input.offboard = true;
+  h.tick();
+  EXPECT_EQ(h.output.phase, uc::FlightPhase::HOLD);
+  EXPECT_EQ(h.output.output_policy, uc::OutputPolicy::ZERO_THRUST);
+  EXPECT_DOUBLE_EQ(h.output.command.thrust, 0.0);
+}
+
+TEST(TakeoffSpool, ParameterMustBeFiniteAndNonnegative) {
+  for (double invalid : {-1.0, std::numeric_limits<double>::infinity(),
+                         std::numeric_limits<double>::quiet_NaN()}) {
+    auto params = flightParams();
+    params.spool_time = invalid;
+    EXPECT_THROW(uc::FlightController(controlParams(), params), std::invalid_argument);
+  }
+  auto params = flightParams();
+  params.spool_time = 0.0;
+  EXPECT_NO_THROW(uc::FlightController(controlParams(), params));
+}
+
+// An accelerometer far from the model makes any estimator update visible as a
+// large drop in the commanded thrust compared with a non-estimating controller.
+TEST(ThrustEstimate, TakeoffWaitsForInAirAndARealHeightGain) {
+  auto params = flightParams();
+  params.estimate_thrust = true;
+  FlightHarness h(params);
+  h.input.imu_valid = true;
+  h.input.state.az_body = 2.0 * controlParams().gravity;
+  const double start_z = h.input.state.pos.z();
+  uc::GeometricController nominal(controlParams());
+  const auto expectNominal = [&](int ticks) {
+    for (int i = 0; i < ticks; ++i) {
+      h.tick();
+      const auto expected =
+          nominal.computeAttitudeThrust(h.output.reference, h.input.state, h.now);
+      EXPECT_NEAR(h.output.command.thrust_raw, expected.thrust_raw, 1e-9);
+    }
+  };
+  h.engage();
+  ASSERT_EQ(h.output.phase, uc::FlightPhase::TAKEOFF);
+  // Height gained, but PX4 still reports ground contact.
+  h.input.state.pos.z() = start_z + 0.25;
+  expectNominal(10);
+  // PX4 reports in-air, but the aircraft has not actually left the ground.
+  h.input.state.pos.z() = start_z;
+  h.input.landing_state = uc::LandingState::IN_AIR;
+  expectNominal(10);
+  h.input.state.pos.z() = start_z + 0.19;
+  expectNominal(10);
+  h.input.state.pos.z() = start_z + 0.21;
+  for (int i = 0; i < 5; ++i) h.tick();
+  const auto expected = nominal.computeAttitudeThrust(h.output.reference, h.input.state, h.now);
+  EXPECT_LT(h.output.command.thrust_raw, 0.8 * expected.thrust_raw);
+}
+
+TEST(ThrustEstimate, HoldAfterAirborneEntryNeedsNoHeightGain) {
+  auto params = flightParams();
+  params.estimate_thrust = true;
+  FlightHarness h(params);
+  h.input.imu_valid = true;
+  h.input.state.az_body = 2.0 * controlParams().gravity;
+  h.input.landing_state = uc::LandingState::IN_AIR;
+  h.engage();
+  ASSERT_EQ(h.output.phase, uc::FlightPhase::HOLD);
+  for (int i = 0; i < 10; ++i) h.tick();
+  uc::GeometricController nominal(controlParams());
+  const auto expected = nominal.computeAttitudeThrust(h.output.reference, h.input.state, h.now);
+  EXPECT_LT(h.output.command.thrust_raw, 0.8 * expected.thrust_raw);
+}
+
+TEST(ThrustEstimate, SpoolRampIgnoresTheAccelerometer) {
+  auto params = flightParams();
+  params.estimate_thrust = true;
+  params.spool_time = 3.0;
+  FlightHarness h(params);
+  h.input.imu_valid = true;
+  h.input.state.az_body = 2.0 * controlParams().gravity;
+  h.engage();
+  h.input.landing_state = uc::LandingState::IN_AIR;
+  for (int i = 1; i < 299; ++i) {
+    h.tick();
+    EXPECT_NEAR(h.output.command.thrust,
+                0.8 * controlParams().hover_percentage * i * 0.01 / params.spool_time, 1e-9);
+  }
+  for (int i = 0; i < 3; ++i) h.tick();
+  EXPECT_NEAR(h.output.command.thrust, controlParams().hover_percentage + 0.01, 0.02);
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {

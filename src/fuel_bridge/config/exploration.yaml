@@ -1,22 +1,22 @@
-# FUEL mapping and exploration settings for MID360 point clouds.
-# Frames come from fuel.launch; mounting extrinsics come from sensor_config.
+# FUEL 建图与探索参数（MID360 点云），在原版 algorithm.xml 之后加载，同名参数以此为准。
+# 坐标系来自 fuel.launch；雷达安装位置和角度来自 sensor_config，不在此填写。
 sdf_map:
-  resolution: 0.2
-  obstacles_inflation: 0.6
-  max_ray_length: 10.0
-  ground_height: -1.0
-  virtual_ceil_height: 3.5
+  resolution: 0.2            # 地图体素大小，单位 m；减小会显著增加计算量。
+  obstacles_inflation: 0.6   # 障碍物膨胀半径，单位 m；不小于机体半径（桨尖约 0.26 m）加余量。
+  max_ray_length: 10.0       # 雷达光线写入地图的最远距离，更远处只标记沿途空闲，单位 m。
+  ground_height: -1.0        # 地图 z 方向起点，单位 m。
+  virtual_ceil_height: 4.5   # 虚拟天花板高度，以上视为障碍，应高于探索边界上限，单位 m。
 map_ros:
-  visualization_truncate_height: 3.5
-  visualization_truncate_low: 0.0
-  show_all_map: true
+  visualization_truncate_height: 3.5  # RViz 显示地图的最高高度，只影响显示，单位 m。
+  visualization_truncate_low: 0.0     # RViz 显示地图的最低高度，只影响显示，单位 m。
+  show_all_map: true                  # RViz 显示整张地图。
 frontier:
-  cluster_min: 30
-  min_candidate_clearance: 0.5
-  min_visib_num: 10
+  cluster_min: 30               # 前沿团的最少体素数，更小的团忽略。
+  min_candidate_clearance: 0.25  # 候选视点与障碍的最小距离，单位 m。
+  min_visib_num: 10             # 候选视点至少能看到的前沿体素数。
 perception_utils:
-  lidar_360: true
-  lidar_min_elevation: -0.122173
-  lidar_max_elevation: 0.907571
-  max_dist: 10.0
-  vis_dist: 2.0
+  lidar_360: true                # 使用 360° 雷达视场模型。
+  lidar_min_elevation: -0.122173 # 雷达竖直视场下限，雷达自身坐标系，单位 rad（-7°）。
+  lidar_max_elevation: 0.907571  # 雷达竖直视场上限，单位 rad（52°）。
+  max_dist: 10.0                 # 评估候选视点时的最远可见距离，单位 m。
+  vis_dist: 2.0                  # RViz 中视场框的显示长度，只影响显示，单位 m。

@@ -1,0 +1,18 @@
+<launch>
+  <include file="$(find fuel_bridge)/launch/fuel.launch">
+    <arg name="sensor_config" value="$(find fuel_bridge)/test/sensor_fixture.yaml"/>
+    <arg name="box_min_x" value="-9.0"/>
+    <arg name="box_min_y" value="-11.0"/>
+    <arg name="box_max_x" value="22.0"/>
+    <arg name="box_max_y" value="10.0"/>
+    <arg name="box_max_z" value="2.5"/>
+    <arg name="max_vel" value="1.0"/>
+    <arg name="max_acc" value="1.0"/>
+    <arg name="rviz" value="false"/>
+    <arg name="odom_topic" value="/fuel_test/odom"/>
+    <arg name="cloud_topic" value="/fuel_test/cloud"/>
+    <arg name="battery_topic" value="/fuel_test/battery"/>
+  </include>
+  <rosparam param="/fuel/mission_manager/home_position">[3.0, 0.0, 1.0]</rosparam>
+  <test test-name="return_observe" pkg="fuel_bridge" type="test_return_observe.py" time-limit="300"/>
+</launch>

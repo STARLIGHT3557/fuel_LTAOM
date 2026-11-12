@@ -15,7 +15,8 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from uav_controller.msg import FlightStatus, TrajectorySetpoint
-from uav_mission_msgs.msg import MissionStatus, TaskContext, PlannerStatus, TrajectoryStatus
+from uav_mission_msgs.msg import (MissionCommand, MissionStatus, TaskContext, PlannerStatus,
+                                  TrajectoryStatus)
 from visualization_msgs.msg import Marker
 
 
@@ -30,7 +31,10 @@ class BridgeTest(unittest.TestCase):
 
     def test_contract(self):
         clouds, hits, poses, commands, triggers, bounds, statuses = ([] for _ in range(7))
+        reports, missions = [], []
         subscribers = [
+            rospy.Subscriber('/fuel/planner_status', PlannerStatus, reports.append),
+            rospy.Subscriber('/fuel/mission_command', MissionCommand, missions.append),
             rospy.Subscriber('/fuel/cloud_world', PointCloud2, clouds.append),
             rospy.Subscriber('/fuel/cloud_hits_world', PointCloud2, hits.append),
             rospy.Subscriber('/fuel/sensor_pose', PoseStamped, poses.append),
@@ -47,6 +51,7 @@ class BridgeTest(unittest.TestCase):
         trajectory_pub = rospy.Publisher('/fuel/trajectory_status', TrajectoryStatus, queue_size=2)
         planner_pub = rospy.Publisher('/fuel/planner_status', PlannerStatus, queue_size=2)
         goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=1)
+        mission_pub = rospy.Publisher('/fuel/mission_command', MissionCommand, queue_size=2)
         for service in ('/fuel/start', '/fuel/stop', '/fuel/return_home'):
             rospy.wait_for_service(service, timeout=10)
         start = rospy.ServiceProxy('/fuel/start', Trigger)
@@ -55,7 +60,8 @@ class BridgeTest(unittest.TestCase):
         self.assertFalse(start().success)
 
         def feed(ready=True, frame='lidar_link', x=2.0, y=3.0, z=1.5,
-                 vx=0.0, battery=0.31, yaw=math.pi/2, yaw_rate=0.0, settled=False):
+                 vx=0.0, battery=0.31, yaw=math.pi/2, yaw_rate=0.0, settled=False, points=None,
+                 phase='HOLD'):
             stamp = rospy.Time.now()
             odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
             odom.pose.pose.position.x = x
@@ -67,11 +73,11 @@ class BridgeTest(unittest.TestCase):
             odom.pose.pose.orientation.w = math.cos(yaw/2)
             state = FlightStatus(feedback_ready=ready,
                                  output_policy='CLOSED_LOOP' if ready else 'NO_OUTPUT',
-                                 phase='HOLD' if ready else 'WAIT')
+                                 phase=phase if ready else 'WAIT')
             charge = BatteryState(header=Header(stamp=stamp), percentage=battery)
             cloud = point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id=frame),
-                [(1, 0, 0), (40, 0, 0), (0, 0, 0), (float('nan'), 1, 1)])
+                points or [(1, 0, 0), (40, 0, 0), (0, 0, 0), (float('nan'), 1, 1)])
             if settled:
                 planner_pub.publish(PlannerStatus(header=Header(stamp=stamp), context=returning,
                                     trajectory_id=1, state=PlannerStatus.GOAL_REACHED))
@@ -128,6 +134,14 @@ class BridgeTest(unittest.TestCase):
         self.assertAlmostEqual(moves[-1].velocity.x, 0.2, places=5)
         self.assertAlmostEqual(moves[-1].acceleration.y, 0.1, places=5)
 
+        # During exploration the map input is limited to the camera view.
+        ahead_and_left = [(2, 0, 0), (0, 2, 0)]
+        for _ in range(5):
+            feed(points=ahead_and_left)
+        points = list(point_cloud2.read_points(clouds[-1], field_names=('x', 'y', 'z')))
+        self.assertEqual(len(points), 1, 'Only the camera view enters the exploration map')
+        self.assertGreater(points[0][1], 4.0, 'The kept return lies ahead of the nose (+y)')
+
         # Repeated planning failures are diagnostic, not a return request.
         for count in (1, 2, 3, 4, 5, 6, 100):
             planner_pub.publish(PlannerStatus(header=Header(stamp=rospy.Time.now()),
@@ -175,6 +189,10 @@ class BridgeTest(unittest.TestCase):
             cmd_pub.publish(cmd)
         self.wait_for(lambda: any(item.context == returning and not item.finished for item in commands),
                       message='return command did not cross the bridge')
+        for _ in range(5):
+            feed(points=ahead_and_left)
+        points = list(point_cloud2.read_points(clouds[-1], field_names=('x', 'y', 'z')))
+        self.assertEqual(len(points), 2, 'Return keeps 360-degree map input')
         deadline = time.monotonic() + 5.0
         while trajectory_pub.get_num_connections() == 0 and time.monotonic() < deadline:
             feed()
@@ -229,6 +247,102 @@ class BridgeTest(unittest.TestCase):
                          'Battery recovery must not cancel or recreate return')
         self.assertIn(statuses[-1].state, (MissionStatus.PREPARE_RETURN, MissionStatus.RETURNING))
 
+        # The box limits exploration only: a return from outside it must reach the controller.
+        self.assertTrue(stop().success)
+        for _ in range(5):
+            feed(x=30.0)
+        self.assertTrue(return_home().success)
+        self.wait_for(lambda: statuses[-1].state == MissionStatus.PREPARE_RETURN,
+                      message='return from outside the box did not start')
+        outside = copy.deepcopy(statuses[-1].context)
+        cmd.context = outside
+        cmd.trajectory_id = 1
+        cmd.position.x = 30.0
+        for _ in range(5):
+            feed(x=30.0)
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+        self.wait_for(lambda: any(item.context == outside and not item.finished for item in commands),
+                      message='bridge dropped a return that started outside the exploration box')
+        cmd.position.x = 2.0
+
+        # A REPLAN must not discard a return START still waiting for the controller.
+        self.assertTrue(stop().success)
+        for _ in range(5):
+            feed()
+        self.assertTrue(start().success)
+        self.wait_for(lambda: statuses[-1].state == MissionStatus.EXPLORING)
+        for _ in range(3):
+            feed(ready=False, battery=0.29)
+        self.wait_for(lambda: statuses[-1].state == MissionStatus.PREPARE_RETURN,
+                      message='low battery did not start return without the controller')
+        waiting = copy.deepcopy(statuses[-1].context)
+        mission_pub.publish(MissionCommand(header=Header(stamp=rospy.Time.now(), frame_id='world'),
+                                           context=waiting, command=MissionCommand.REPLAN))
+        time.sleep(0.1)
+        cmd.context = waiting
+        cmd.trajectory_id = 1
+        for _ in range(5):
+            feed()
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+        self.wait_for(lambda: any(item.context == waiting and not item.finished for item in commands),
+                      message='REPLAN discarded a return START waiting for the controller')
+
+        # A hovering controller would fly straight at a far reference, so it must not receive one.
+        self.assertTrue(stop().success)
+        for _ in range(5):
+            feed()
+        self.assertTrue(return_home().success)
+        self.wait_for(lambda: statuses[-1].state == MissionStatus.PREPARE_RETURN,
+                      message='return did not start')
+        task = copy.deepcopy(statuses[-1].context)
+        cmd.context = task
+        cmd.trajectory_id = 1
+        cmd.position.x = 6.0
+        for _ in range(5):
+            feed()
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+        self.wait_for(lambda: any(item.context == task and item.state == PlannerStatus.OUTPUT_TIMEOUT
+                                  for item in reports),
+                      message='a refused reference was not reported')
+        self.wait_for(lambda: any(item.context == task and item.command == MissionCommand.REPLAN
+                                  for item in missions),
+                      message='a refused reference did not lead to a replan request')
+        self.assertFalse(any(item.context == task and not item.finished for item in commands),
+                         'A reference 4 m from the aircraft reached the controller')
+
+        # The replanned reference near the aircraft goes through.
+        cmd.position.x = 2.0
+        cmd.trajectory_id = 2
+        for _ in range(5):
+            feed()
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+        self.wait_for(lambda: any(item.context == task and item.trajectory_id == 2 and not item.finished
+                                  for item in commands),
+                      message='a reference near the aircraft was refused')
+
+        # Back in HOLD mid-task the same protection applies, but not while following a trajectory.
+        cmd.position.x = 6.0
+        cmd.trajectory_id = 3
+        for _ in range(3):
+            feed()
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+        time.sleep(0.05)
+        self.assertFalse(any(item.context == task and item.trajectory_id == 3 for item in commands),
+                         'A far reference reached a hovering controller mid-task')
+        for _ in range(3):
+            feed(phase='TRAJECTORY')
+            cmd.header.stamp = rospy.Time.now()
+            cmd_pub.publish(cmd)
+        self.wait_for(lambda: any(item.context == task and item.trajectory_id == 3 and not item.finished
+                                  for item in commands),
+                      message='tracking error while following a trajectory was treated as a jump')
+        cmd.position.x = 2.0
+
         self.assertTrue(stop().success)
         for _ in range(5):
             feed(ready=False)
@@ -244,4 +358,4 @@ class BridgeTest(unittest.TestCase):
 
 if __name__ == '__main__':
     rospy.init_node('test_fuel_bridge')
-    rostest.rosrun('prometheus_fuel', 'fuel_bridge_contract', BridgeTest)
+    rostest.rosrun('fuel_bridge', 'fuel_bridge_contract', BridgeTest)

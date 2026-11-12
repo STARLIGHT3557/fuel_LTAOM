@@ -9,15 +9,18 @@ fuel_test_dir=$(mktemp -d /tmp/fuel-tests.XXXXXX)
 export ROS_HOME="$fuel_test_dir/home"
 export ROS_LOG_DIR="$fuel_test_dir/log"
 export FUEL_TSP_DIR="$fuel_test_dir/tsp"
-mkdir -p "$ROS_LOG_DIR" "$FUEL_TSP_DIR" "$ROS_HOME/test_results/prometheus_fuel" "$ROS_HOME/test_results/uav_controller"
+mkdir -p "$ROS_LOG_DIR" "$FUEL_TSP_DIR" "$ROS_HOME/test_results/fuel_bridge" "$ROS_HOME/test_results/uav_controller"
+# rostest runs these directly, and a checkout from Windows does not mark them executable.
+chmod +x "$fuel_root"/src/fuel_bridge/test/test_*.py
 rostest uav_controller position_step_ros.test
-rostest prometheus_fuel frontier_boundary.test
-rostest prometheus_fuel bridge.test
-rostest prometheus_fuel realflight_bridge.test
-rostest prometheus_fuel planner.test
-rostest prometheus_fuel planner_overrun.test
-rostest prometheus_fuel exploration_handover.test
-rostest prometheus_fuel exploration_timeouts.test
-rostest prometheus_fuel return_recovery.test
-rostest prometheus_fuel return_planner.test
+rostest fuel_bridge frontier_boundary.test
+rostest fuel_bridge bridge.test
+rostest fuel_bridge realflight_bridge.test
+rostest fuel_bridge planner.test
+rostest fuel_bridge planner_overrun.test
+rostest fuel_bridge exploration_timeouts.test
+rostest fuel_bridge return_recovery.test
+rostest fuel_bridge return_planner.test
+rostest fuel_bridge return_takeover.test
+rostest fuel_bridge return_observe.test
 echo "Test results: $ROS_HOME/test_results"

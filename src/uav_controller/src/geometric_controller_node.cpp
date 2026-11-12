@@ -14,34 +14,35 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <std_msgs/String.h>
-#include <uav_mission_msgs/ControllerAck.h>
 #include <uav_mission_msgs/TaskContext.h>
-#include <uav_mission_msgs/TrajectoryStatus.h>
 
 #include "uav_controller/TrajectoryCommand.h"
 #include "uav_controller/TrajectorySetpoint.h"
 #include "uav_controller/FlightStatus.h"
 #include "uav_controller/flight_controller.hpp"
-#include "uav_controller/feedback_time.hpp"
 
 namespace uc = uav_controller;
 
 class GeometricControllerRos1Node {
 public:
   GeometricControllerRos1Node() : pnh_("~") {
+    // 控制律参数，实飞取自 fuel_bridge/config/uav_controller_realflight.yaml。
     uc::ControllerParams control;
-    loadVector("k_pos", Eigen::Vector3d(3.0, 3.0, 4.0), control.k_pos);
-    loadVector("k_vel", Eigen::Vector3d(3.0, 3.0, 3.5), control.k_vel);
-    pnh_.param("hover_percentage", control.hover_percentage, 0.65);
-    pnh_.param("max_a_fb", control.max_a_fb, 8.0);
+    loadVector("k_pos", Eigen::Vector3d(3.0, 3.0, 4.0), control.k_pos);  // 位置误差增益
+    loadVector("k_vel", Eigen::Vector3d(3.0, 3.0, 3.5), control.k_vel);  // 速度误差增益
+    pnh_.param("hover_percentage", control.hover_percentage, 0.65);       // 悬停油门初值
+    pnh_.param("max_a_fb", control.max_a_fb, 8.0);                        // 反馈加速度上限 m/s²
     pnh_.param("gravity", control.gravity, 9.81);
+    // 状态机参数，取自 uav_controller/config/fsm.yaml；实飞 launch 固定
+    // direct_trajectory=true、position_step=false。自动起飞参数只在地面切 OFFBOARD 时使用。
     uc::FlightParams flight;
     pnh_.param("fsm/position_step", flight.position_step, flight.position_step);
     pnh_.param("fsm/direct_trajectory", flight.direct_trajectory, flight.direct_trajectory);
     direct_trajectory_ = flight.direct_trajectory;
     loadVector("fsm/step_target", flight.step_target, flight.step_target);
-    pnh_.param("fsm/takeoff_height", flight.takeoff_height, flight.takeoff_height);
+    pnh_.param("fsm/takeoff_height", flight.takeoff_height, flight.takeoff_height);  // 绝对高度
     pnh_.param("fsm/takeoff_speed", flight.takeoff_speed, flight.takeoff_speed);
+    pnh_.param("fsm/spool_time", flight.spool_time, flight.spool_time);  // 起飞前起转时长（s）
     pnh_.param("fsm/hover_before", flight.hover_before, flight.hover_before);
     pnh_.param("fsm/position_tolerance", flight.position_tolerance, flight.position_tolerance);
     pnh_.param("fsm/speed_tolerance", flight.speed_tolerance, flight.speed_tolerance);
@@ -50,20 +51,18 @@ public:
     pnh_.param("fsm/takeoff_timeout", flight.takeoff_timeout, flight.takeoff_timeout);
     pnh_.param("fsm/hover_timeout", flight.hover_timeout, flight.hover_timeout);
     pnh_.param("fsm/feedback_recovery_time", flight.feedback_recovery_time, flight.feedback_recovery_time);
-    pnh_.param("timestamp_future_tolerance", future_tolerance_, 0.05);
-    flight.timestamp_future_tolerance = future_tolerance_;
+    // 轨迹点时间戳允许超前本机时间（s）
+    pnh_.param("timestamp_future_tolerance", flight.timestamp_future_tolerance, 0.05);
+    // 在线估计悬停油门：确认离地后才估计（起飞阶段要求高度上升 0.2 m），结果限制在 [0.1, 0.8]
     pnh_.param("estimate_thrust", flight.estimate_thrust, false);
-    pnh_.param("control_rate_hz", control_rate_, 100.0);
-    pnh_.param("feedback_timeout", feedback_timeout_, 0.5);
-    pnh_.param("state_timeout", state_timeout_, 2.0);
-    pnh_.param("print_tracking", print_tracking_, true);
+    pnh_.param("control_rate_hz", control_rate_, 100.0);   // 控制频率 Hz
+    pnh_.param("print_tracking", print_tracking_, true);   // 是否周期打印跟踪误差
     pnh_.param("print_period_ms", print_period_ms_, 500);
-    if (!positive(control_rate_) || !positive(feedback_timeout_) ||
-        !positive(state_timeout_) || print_period_ms_ <= 0)
-      throw std::invalid_argument("invalid ROS rate/timeout parameters");
+    if (!positive(control_rate_) || print_period_ms_ <= 0)
+      throw std::invalid_argument("invalid ROS rate/print parameters");
     controller_ = std::make_unique<uc::FlightController>(control, flight,
                                                         ros::WallTime::now().toNSec());
-    input_.state.az_specific_up = control.gravity;
+    input_.state.az_body = control.gravity;
 
     sub_pose_ = nh_.subscribe(topic("pose_topic", "/mavros/local_position/pose"), 5,
                              &GeometricControllerRos1Node::onPose, this);
@@ -80,9 +79,6 @@ public:
     sub_authorization_ = nh_.subscribe(
         topic("authorization_topic", "/fuel/authorized_context"), 5,
         &GeometricControllerRos1Node::onAuthorization, this);
-    sub_trajectory_status_ = nh_.subscribe(
-        topic("trajectory_status_topic", "/fuel/trajectory_status"), 10,
-        &GeometricControllerRos1Node::onTrajectoryStatus, this);
     pub_attitude_ = nh_.advertise<mavros_msgs::AttitudeTarget>(
         topic("attitude_setpoint_topic", "/mavros/setpoint_raw/attitude"), 10);
     pub_reference_ = nh_.advertise<mavros_msgs::PositionTarget>(
@@ -93,8 +89,6 @@ public:
         topic("fsm_state_topic", "/uav_controller/fsm_state"), 1, true);
     pub_status_ = nh_.advertise<uc::FlightStatus>(
         topic("fsm_status_topic", "/uav_controller/fsm_status"), 1, true);
-    pub_controller_ack_ = nh_.advertise<uav_mission_msgs::ControllerAck>(
-        topic("controller_ack_topic", "/fuel/controller_ack"), 10);
 
     timer_ = nh_.createTimer(ros::Duration(1.0/control_rate_),
                              &GeometricControllerRos1Node::controlLoop, this);
@@ -104,21 +98,18 @@ public:
       ROS_INFO("Position step: target=[%.2f %.2f %.2f] m ENU, yaw=0 rad, rate %.0f Hz; "
                "manual takeoff, then switch to OFFBOARD to apply the target immediately",
                flight.step_target.x(), flight.step_target.y(), flight.step_target.z(), control_rate_);
-      ROS_INFO("Waiting for armed + OFFBOARD and fresh MAVROS IN_AIR confirmation; "
+      ROS_INFO("Waiting for armed + OFFBOARD and MAVROS IN_AIR confirmation; "
                "exit/re-enter OFFBOARD to repeat the step");
     } else {
       ROS_INFO("FSM controller: absolute takeoff z=%.2f m, hover %.1f s, rate %.0f Hz; "
                "trajectory completion holds the endpoint for operator takeover",
                flight.takeoff_height, flight.hover_before, control_rate_);
-      ROS_INFO("Waiting for manual ARM + OFFBOARD and fresh MAVROS ground confirmation");
+      ROS_INFO("Waiting for manual ARM + OFFBOARD and MAVROS ground confirmation");
     }
   }
 
 private:
   static bool positive(double v) { return std::isfinite(v) && v > 0.0; }
-  bool fresh(const ros::Time &stamp, const ros::Time &now, double timeout) const {
-    return uc::freshTimestamp(stamp.toSec(), now.toSec(), timeout, future_tolerance_);
-  }
   std::string topic(const std::string &name, const std::string &fallback) {
     std::string result;
     pnh_.param(name, result, fallback);
@@ -129,29 +120,26 @@ private:
     pnh_.param(name + "/y", out.y(), defaults.y());
     pnh_.param(name + "/z", out.z(), defaults.z());
   }
+  // Non-finite feedback is rejected centrally by FlightController.
   void onPose(const geometry_msgs::PoseStamped::ConstPtr &msg) {
     const auto &p = msg->pose.position;
     const auto &q = msg->pose.orientation;
-    Eigen::Vector3d pos(p.x, p.y, p.z);
-    Eigen::Quaterniond quat(q.w, q.x, q.y, q.z);
-    if (!pos.allFinite() || !quat.coeffs().allFinite() || quat.norm() < 1e-6) {
-      pose_stamp_ = ros::Time();
-      return;
-    }
-    input_.state.pos = pos;
-    input_.state.quat = quat.normalized();
-    pose_stamp_ = msg->header.stamp;
+    input_.state.pos << p.x, p.y, p.z;
+    input_.state.quat = Eigen::Quaterniond(q.w, q.x, q.y, q.z).normalized();
+    have_pose_ = true;
   }
   void onVelocity(const geometry_msgs::TwistStamped::ConstPtr &msg) {
     const auto &v = msg->twist.linear;
     input_.state.vel << v.x, v.y, v.z;
-    velocity_stamp_ = input_.state.vel.allFinite() ? msg->header.stamp : ros::Time();
+    have_velocity_ = true;
   }
   void onImu(const sensor_msgs::Imu::ConstPtr &msg) {
-    const auto &a = msg->linear_acceleration;
-    const Eigen::Vector3d accel(a.x, a.y, a.z);
-    input_.state.az_specific_up = (input_.state.quat * accel).z();
-    imu_stamp_ = accel.allFinite() ? msg->header.stamp : ros::Time();
+    // 推力估计使用机体 z 轴比力（与 px4ctrl 的 imu_data.a(2) 相同），
+    // 与油门按机体 z 轴投影的计算方式一致。
+    // Body-z (FLU) specific force, as px4ctrl's imu_data.a(2): thrust acts
+    // along body z, matching the thrust projection onto body z.
+    input_.state.az_body = msg->linear_acceleration.z;
+    input_.imu_valid = true;
   }
   void onState(const mavros_msgs::State::ConstPtr &msg) {
     if (input_.armed && !msg->armed)
@@ -159,7 +147,6 @@ private:
     input_.armed = msg->armed;
     input_.offboard = msg->mode == "OFFBOARD";
     connected_ = msg->connected;
-    state_stamp_ = msg->header.stamp;
   }
   void onExtendedState(const mavros_msgs::ExtendedState::ConstPtr &msg) {
     landed_state_ = msg->landed_state;
@@ -174,7 +161,6 @@ private:
         observed_landing_state_ = uc::LandingState::LANDING; break;
       default: observed_landing_state_ = uc::LandingState::UNKNOWN; break;
     }
-    extended_stamp_ = msg->header.stamp;
   }
   bool authorized(const uav_mission_msgs::TaskContext& context) const {
     const auto& auth = input_.authorization;
@@ -191,18 +177,6 @@ private:
     auth.valid = msg->manager_epoch != 0 && msg->mission_id != 0 &&
                  msg->task_type != uav_mission_msgs::TaskContext::TASK_NONE &&
                  !msg->source_id.empty();
-  }
-  void onTrajectoryStatus(const uav_mission_msgs::TrajectoryStatus::ConstPtr& msg) {
-    if (msg->state != uav_mission_msgs::TrajectoryStatus::PENDING) return;
-    uav_mission_msgs::ControllerAck ack;
-    ack.header.stamp = ros::Time::now();
-    ack.header.frame_id = msg->header.frame_id;
-    ack.context = msg->context;
-    ack.trajectory_id = msg->trajectory_id;
-    ack.accepted = controller_ready_ && authorized(msg->context) && msg->trajectory_id != 0;
-    ack.detail = ack.accepted ? "authorized trajectory handover accepted"
-                              : "controller not ready or task is unauthorized";
-    pub_controller_ack_.publish(ack);
   }
   void onTrajectory(const uc::TrajectorySetpoint::ConstPtr &msg) {
     // FUEL/direct mode is a manager-owned execution path and therefore requires
@@ -262,25 +236,13 @@ private:
   }
   void controlLoop(const ros::TimerEvent &) {
     const ros::Time now = ros::Time::now();
-    const bool pose_ok = fresh(pose_stamp_, now, feedback_timeout_);
-    const bool velocity_ok = fresh(velocity_stamp_, now, feedback_timeout_);
-    const bool state_ok = fresh(state_stamp_, now, state_timeout_);
-    input_.feedback_valid = connected_ && pose_ok && velocity_ok && state_ok;
-    input_.landing_state = fresh(extended_stamp_, now, state_timeout_)
-                               ? observed_landing_state_ : uc::LandingState::UNKNOWN;
-    input_.imu_valid = fresh(imu_stamp_, now, feedback_timeout_);
+    input_.feedback_valid = connected_ && have_pose_ && have_velocity_;
+    input_.landing_state = observed_landing_state_;
     if (!input_.feedback_valid) {
-      ROS_WARN_THROTTLE(1.0,
-          "Feedback invalid: connected=%d pose_ok=%d age=%.4fs velocity_ok=%d age=%.4fs "
-          "state_ok=%d age=%.4fs (age<0: future stamp; stamp=0: missing/invalid; "
-          "limits pose/velocity=%.2fs state=%.2fs future=%.3fs)",
-          connected_, pose_ok, (now-pose_stamp_).toSec(), velocity_ok,
-          (now-velocity_stamp_).toSec(), state_ok, (now-state_stamp_).toSec(),
-          feedback_timeout_, state_timeout_, future_tolerance_);
+      ROS_WARN_THROTTLE(1.0, "Feedback invalid: connected=%d pose_received=%d velocity_received=%d",
+                        connected_, have_pose_, have_velocity_);
     }
     const uc::FlightOutput out = controller_->update(input_, now.toSec());
-    controller_ready_ = out.feedback_ready && out.output_policy == uc::OutputPolicy::CLOSED_LOOP &&
-                        (out.phase == uc::FlightPhase::HOLD || out.phase == uc::FlightPhase::TRAJECTORY);
     const bool changed = !have_phase_ || out.transition.sequence != last_transition_;
     if (changed) {
       ROS_INFO("FSM: %s -> %s reason=%s mission=%llu transition=%llu output=%s",
@@ -351,20 +313,20 @@ private:
 
   ros::NodeHandle nh_, pnh_;
   ros::Subscriber sub_pose_, sub_velocity_, sub_imu_, sub_state_, sub_extended_, sub_trajectory_,
-      sub_authorization_, sub_trajectory_status_;
-  ros::Publisher pub_attitude_, pub_reference_, pub_command_, pub_phase_, pub_status_, pub_controller_ack_;
+      sub_authorization_;
+  ros::Publisher pub_attitude_, pub_reference_, pub_command_, pub_phase_, pub_status_;
   ros::Timer timer_;
   std::unique_ptr<uc::FlightController> controller_;
   uc::FlightInput input_;
-  ros::Time pose_stamp_, velocity_stamp_, imu_stamp_, state_stamp_, extended_stamp_, command_stamp_;
+  ros::Time command_stamp_;
   std::uint64_t last_transition_{0};
   uc::OutputPolicy last_policy_{uc::OutputPolicy::NO_OUTPUT};
   uc::LandingState observed_landing_state_{uc::LandingState::UNKNOWN};
-  double control_rate_{100.0}, feedback_timeout_{0.5}, state_timeout_{2.0};
-  double future_tolerance_{0.05};
+  double control_rate_{100.0};
   uint8_t landed_state_{mavros_msgs::ExtendedState::LANDED_STATE_UNDEFINED};
   int print_period_ms_{500};
-  bool print_tracking_{true}, connected_{false}, have_phase_{false}, controller_ready_{false};
+  bool print_tracking_{true}, connected_{false}, have_phase_{false};
+  bool have_pose_{false}, have_velocity_{false};
   bool direct_trajectory_{false};
 };
 

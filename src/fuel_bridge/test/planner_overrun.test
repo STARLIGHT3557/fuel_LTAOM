@@ -1,6 +1,6 @@
 <launch>
-  <include file="$(find prometheus_fuel)/launch/fuel.launch">
-    <arg name="sensor_config" value="$(find prometheus_fuel)/test/sensor_fixture.yaml"/>
+  <include file="$(find fuel_bridge)/launch/fuel.launch">
+    <arg name="sensor_config" value="$(find fuel_bridge)/test/sensor_fixture.yaml"/>
     <arg name="box_min_x" value="-1.0"/>
     <arg name="box_min_y" value="-11.0"/>
     <arg name="box_max_x" value="22.0"/>
@@ -16,5 +16,5 @@
   <!-- Force real planning to exceed its nominal look-ahead without adding sleeps
        or test hooks to the production planner. Success must remain EXPLORE. -->
   <param name="/exploration_node/fsm/replan_time" value="0.000001"/>
-  <test test-name="fuel_planner_overrun" pkg="prometheus_fuel" type="test_planner.py" time-limit="90"/>
+  <test test-name="fuel_planner_overrun" pkg="fuel_bridge" type="test_planner.py" time-limit="90"/>
 </launch>

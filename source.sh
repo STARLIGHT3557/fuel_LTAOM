@@ -19,3 +19,6 @@ done
 unset fuel_existing_ros_package_path fuel_existing_package_paths fuel_package_path
 export FUEL_TSP_DIR="${FUEL_TSP_DIR:-$fuel_root/build/fuel_runtime}"
 mkdir -p "$FUEL_TSP_DIR" || return 1
+# 多会话地图存储（FUEL 栅格地图 + LTAOM 点云先验）。
+mkdir -p "$HOME/fuel_sim_logs/map_prior" \
+         "$HOME/fuel_sim_logs/ltaom/map_prior" || return 1

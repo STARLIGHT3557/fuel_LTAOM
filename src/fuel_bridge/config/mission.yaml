@@ -1,39 +1,40 @@
+# 任务管理器参数（mission_manager），同时加载到 FUEL、轨迹执行器和 bridge。
+# 完整说明见 docs/REALFLIGHT_PARAMETERS.md。
+
+# 返航点，本地 ENU，单位 m。到达后悬停并把航向转到 0；必须在探索边界内且是已知空闲区域。
 home_position: [0.0, 0.0, 1.0]
+# 任务授权标识，规划器、bridge 和控制器靠它匹配任务，不要修改。
 source_id: fuel_planner
+# 多会话地图复用：fresh=单次运行，save=首次运行并保存，load=加载已有地图并续用。
+session: fresh
+multisession:
+  map_save_topic: /save_occ_map            # MapROS 栅格地图保存触发（std_msgs/Empty）
+  prior_save_param: /save_prior_info       # LTAOM loop_optimization 保存触发
+  descriptor_save_param: /save_prior_descriptor  # LTAOM std_loop 保存触发
+  ground_confirm_time: 1.0                 # 落地去抖时间，单位 s
+# 里程计和控制器状态的新鲜度要求，单位 s。
 data_timeout: 0.5
-# Console summary interval (seconds); task/reason changes are logged immediately.
+# 终端状态行的打印周期，单位 s；状态或原因变化时立即打印。
 status_log_period: 2.0
 
 battery:
-  enabled: true
-  return_threshold: 0.20
-  data_timeout: 3.0
+  enabled: true          # 是否启用低电量返航。
+  return_threshold: 0.20 # 有效电量低于此比例时自动返航，需留足返航所需电量。
+  data_timeout: 3.0      # 电量数据超过此时间未更新视为无效，单位 s。
 
 exploration:
-  finish_confirm_cycles: 10
-  # Planning failures retry without a count limit; battery and timeout returns remain active.
-  retry_interval: 1.0
-  initial_plan_timeout: 10.0
-  planner_status_timeout: 4.0
+  # FUEL 第一次找不到可覆盖前沿即视为探索完成。
+  initial_plan_timeout: 10.0   # 开始探索后多久没有第一条轨迹就返航，单位 s。
+  planner_status_timeout: 4.0  # 规划器心跳超时，探索中超时则返航，单位 s。
 
 return_home:
+  # FUEL 中途返航分段的滚动重规划周期，单位 s。
   replan_period: 1.0
-  # Timeouts request recovery; return has no failure-count or total-time limit.
+  # 返航超时后，管理器重新请求规划的间隔，单位 s。
   retry_interval: 1.0
-  # A failed candidate keeps using a safe active trajectory. Retry sooner when
-  # its remaining execution window can no longer accommodate the normal delay.
-  urgent_retry_interval: 0.1
-  # Reserved after planning for transport, controller acknowledgement and the
-  # activation-time continuity recheck at the single scheduled switch time.
-  handover_margin: 0.1
-  # Deadline for the first executor ACTIVE event; not a limit on return duration.
+  # 第一条返航轨迹到达轨迹执行器的最长等待时间，单位 s。
   planning_timeout: 10.0
-  position_tolerance: 0.20
-  speed_tolerance: 0.15
-  stable_time: 1.5
-
-trajectory_handover:
-  position_tolerance: 0.75
-  velocity_tolerance: 1.0
-  acceleration_tolerance: 2.0
-  timeout: 2.0
+  position_tolerance: 0.20  # 判断到家的位置误差，单位 m。
+  speed_tolerance: 0.15     # 判断到家的速度误差，单位 m/s。
+  stable_time: 1.5          # 到家后需持续稳定的时间，之后进入 HOME_HOLD，单位 s。
+  arrival_timeout: 5.0      # 末段轨迹结束后这么久还没到家，就从当前位置重新规划，单位 s。

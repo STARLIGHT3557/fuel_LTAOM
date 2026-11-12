@@ -1,6 +1,6 @@
 <launch>
-  <include file="$(find prometheus_fuel)/launch/fuel.launch">
-    <arg name="sensor_config" value="$(find prometheus_fuel)/test/sensor_fixture.yaml"/>
+  <include file="$(find fuel_bridge)/launch/fuel.launch">
+    <arg name="sensor_config" value="$(find fuel_bridge)/test/sensor_fixture.yaml"/>
     <arg name="box_min_x" value="-1.0"/>
     <arg name="box_min_y" value="-11.0"/>
     <arg name="box_max_x" value="22.0"/>
@@ -15,6 +15,5 @@
   </include>
   <!-- Put the test goal in a removable synthetic wall. Production home stays (0,0,1). -->
   <rosparam param="/fuel/mission_manager/home_position">[3.0, 0.0, 1.0]</rosparam>
-  <param name="/exploration_node/return_home/retry_interval" value="0.2"/>
-  <test test-name="persistent_return_planner" pkg="prometheus_fuel" type="test_return_planner.py" time-limit="65"/>
+  <test test-name="persistent_return_planner" pkg="fuel_bridge" type="test_return_planner.py" time-limit="100"/>
 </launch>

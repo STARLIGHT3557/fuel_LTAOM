@@ -1,4 +1,4 @@
 <launch>
-  <test test-name="fuel_frontier_boundary" pkg="prometheus_fuel"
+  <test test-name="fuel_frontier_boundary" pkg="fuel_bridge"
         type="fuel_frontier_boundary" time-limit="30"/>
 </launch>

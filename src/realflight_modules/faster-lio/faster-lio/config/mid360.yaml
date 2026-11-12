@@ -1,5 +1,6 @@
-# MID360 built-in IMU; lidar pitched 15 degrees down toward the nose.
-# Assumes lidar X points forward, Y left, Z up before the pitch rotation.
+# MID360 内置 IMU；雷达朝机头方向向下倾斜 15°。
+# 倾斜前雷达 X 朝前、Y 朝左、Z 朝上。
+# FUEL 启动时由 prepare_realflight.py 读取本文件的外参，生成点云转换和规划视场所需参数。
 common:
     lid_topic: "/livox/lidar"
     imu_topic: "/livox/imu"
@@ -7,7 +8,7 @@ common:
 preprocess:
     lidar_type: 1
     scan_line: 4
-    blind: 0.4
+    blind: 0.4          # 忽略离雷达小于此距离的点，单位 m。
     time_scale: 1e-9
 mapping:
     acc_cov: 0.1
@@ -16,31 +17,32 @@ mapping:
     b_gyr_cov: 0.0001
     fov_degree: 360
     det_range: 100.0
-    extrinsic_est_en: false
-    # LiDAR -> internal IMU: p_I = R_IL * p_L + t_IL.
+    extrinsic_est_en: false   # 必须为 false：FUEL 依赖固定外参。
+    # 雷达到内置 IMU 的外参（厂家固定值，不改）：p_I = R_IL * p_L + t_IL。
     extrinsic_T: [-0.011, -0.02329, 0.04412]
     extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
-    # Body -> IMU rotation. Output orientation follows the aircraft axes.
+    # 机体系到 IMU 系的旋转，即雷达安装角度（当前绕 y 轴 15°，机头朝下）。输出姿态沿用飞机坐标轴。
+    # 改安装角度时，必须同时修改 ekf_pose/launch/PX4_vio_drone.yaml 的 rotation_imu。
     imu_body_R: [0.9659258262890683, 0, -0.25881904510252074,
                  0, 1, 0,
                  0.25881904510252074, 0, 0.9659258262890683]
-    # NOT CALIBRATED: body origin temporarily coincides with MID360 IMU.
-    # Replace with IMU-to-body-origin vector expressed in IMU coordinates.
+    # 未标定：暂时假设机体原点与 MID360 IMU 重合。
+    # 应填入机体原点在 IMU 坐标系中的位置（m），并同步修改 EKF 的 tr_i 和 imu_trans_*。
     imu_body_T: [0.0, 0.0, 0.0]
 publish:
     path_publish_en: true
-    scan_publish_en: true
+    scan_publish_en: true         # 必须为 true：发布去畸变点云。
     dense_publish_en: false
-    scan_bodyframe_pub_en: true
+    scan_bodyframe_pub_en: true   # 必须为 true：FUEL 订阅 /laserMapping/cloud_registered_body。
 pcd_save:
-    # Avoid accumulating an unlimited full-resolution cloud in flight.
-    pcd_save_en: false
+    # 飞行中不保存点云，避免无限累积全分辨率点云。
+    pcd_save_en: true
     interval: -1
 feature_extract_enable: false
-point_filter_num: 3
+point_filter_num: 3        # 点云降采样间隔，增大可降低计算量但建图更稀疏。
 max_iteration: 3
-filter_size_surf: 0.5
-filter_size_map: 0.5
+filter_size_surf: 0.5      # LIO 内部当前帧体素滤波尺寸，单位 m。
+filter_size_map: 0.5       # LIO 内部地图体素滤波尺寸，单位 m。
 cube_side_length: 1000
 ivox_grid_resolution: 0.5
 ivox_nearby_type: 18

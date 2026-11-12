@@ -14,26 +14,24 @@ from sensor_msgs.msg import BatteryState, PointCloud2
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker
-from uav_mission_msgs.msg import ControllerAck, PlannerStatus, TrajectoryStatus, TaskContext
+from uav_mission_msgs.msg import PlannerStatus, TaskContext
 
 
 class PlannerTest(unittest.TestCase):
     def test_planner(self):
-        self.moves, self.splines, self.frontiers, self.maps, self.handoffs = [], [], [], [], []
+        self.moves, self.splines, self.frontiers, self.maps = [], [], [], []
         self.planner_states = []
         subscribers = [
             rospy.Subscriber('/uav_controller/trajectory_setpoint', TrajectorySetpoint, self.moves.append),
             rospy.Subscriber('/planning/bspline', Bspline, self.splines.append),
             rospy.Subscriber('/planning_vis/frontier', Marker, self.frontiers.append),
             rospy.Subscriber('/sdf_map/occupancy_all', PointCloud2, self.maps.append),
-            rospy.Subscriber('/fuel/trajectory_status', TrajectoryStatus, self.handoffs.append),
             rospy.Subscriber('/fuel/planner_status', PlannerStatus, self.planner_states.append),
         ]
         odom_pub = rospy.Publisher('/fuel_test/odom', Odometry, queue_size=2)
         cloud_pub = rospy.Publisher('/fuel_test/cloud', PointCloud2, queue_size=2)
         state_pub = rospy.Publisher('/uav_controller/fsm_status', FlightStatus, queue_size=2)
         battery_pub = rospy.Publisher('/fuel_test/battery', BatteryState, queue_size=2)
-        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=2)
         # Long returns let FUEL raycast free space to its 10 m range limit.
         # A small wall at x=4 provides occupied voxels without closing the room.
         points = []
@@ -60,13 +58,11 @@ class PlannerTest(unittest.TestCase):
             odom.pose.pose.position.z = min(1.5, 0.2 + 0.4 * (time.monotonic() - scan_start))
             odom.pose.pose.orientation.w = 1
             odom_pub.publish(odom)
+            # Report flying: this odometry never follows the trajectory, and the bridge refuses
+            # references that move away from a hovering aircraft.
             state_pub.publish(FlightStatus(feedback_ready=True, output_policy="CLOSED_LOOP",
-                                           phase="HOLD"))
+                                           phase="TRAJECTORY"))
             battery_pub.publish(BatteryState(header=Header(stamp=stamp), percentage=0.31))
-            if self.handoffs and self.handoffs[-1].state == TrajectoryStatus.PENDING:
-                handoff = self.handoffs[-1]
-                ack_pub.publish(ControllerAck(header=Header(stamp=stamp), context=handoff.context,
-                                              trajectory_id=handoff.trajectory_id, accepted=True))
             cloud_pub.publish(point_cloud2.create_cloud_xyz32(
                 Header(stamp=stamp, frame_id='lidar_link'), points))
 
@@ -117,4 +113,4 @@ class PlannerTest(unittest.TestCase):
 
 if __name__ == '__main__':
     rospy.init_node('test_fuel_planner')
-    rostest.rosrun('prometheus_fuel', 'fuel_planner_smoke', PlannerTest)
+    rostest.rosrun('fuel_bridge', 'fuel_planner_smoke', PlannerTest)

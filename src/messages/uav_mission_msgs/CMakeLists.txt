@@ -9,7 +9,6 @@ add_message_files(FILES
   MissionStatus.msg
   PlannerStatus.msg
   TrajectoryStatus.msg
-  ControllerAck.msg
 )
 
 generate_messages(DEPENDENCIES geometry_msgs std_msgs)

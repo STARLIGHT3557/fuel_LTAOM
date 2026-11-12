@@ -61,4 +61,4 @@ class RealflightBridgeTest(unittest.TestCase):
 
 if __name__ == '__main__':
     rospy.init_node('test_realflight_bridge')
-    rostest.rosrun('prometheus_fuel', 'realflight_cloud_transform', RealflightBridgeTest)
+    rostest.rosrun('fuel_bridge', 'realflight_cloud_transform', RealflightBridgeTest)

@@ -11,9 +11,9 @@ from sensor_msgs.msg import BatteryState
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from uav_controller.msg import FlightStatus
-from uav_mission_msgs.msg import (ControllerAck, MissionCommand, MissionStatus,
-                                 PlannerStatus, TrajectoryStatus)
+from uav_mission_msgs.msg import MissionCommand, MissionStatus, PlannerStatus, TrajectoryStatus
 
+STABLE_TIME = 1.5  # exploration_timeouts.test
 
 class ExplorationTimeoutsTest(unittest.TestCase):
     def wait_for(self, predicate, message, timeout=4.0):
@@ -108,14 +108,14 @@ class ExplorationTimeoutsTest(unittest.TestCase):
         ]
         odom_pub = rospy.Publisher('/fuel/odom', Odometry, queue_size=2)
         state_pub = rospy.Publisher('/fuel/control_state', FlightStatus, queue_size=2)
-        planner_pub = rospy.Publisher('/fuel/planner_status', PlannerStatus, queue_size=2)
+        planner_pub = rospy.Publisher('/fuel/planner_status', PlannerStatus, queue_size=10)
         trajectory_pub = rospy.Publisher('/fuel/trajectory_status', TrajectoryStatus, queue_size=2)
-        ack_pub = rospy.Publisher('/fuel/controller_ack', ControllerAck, queue_size=2)
-        current = {'context': None, 'planner_state': None, 'trajectory_id': 0}
+        current ={'context': None, 'planner_state': None, 'trajectory_id': 0, 'x': 0.0}
 
         def feed(_):
             stamp = rospy.Time.now()
             odom = Odometry(header=Header(stamp=stamp, frame_id='world'))
+            odom.pose.pose.position.x = current['x']
             odom.pose.pose.position.z = 1.0
             odom.pose.pose.orientation.w = 1.0
             odom_pub.publish(odom)
@@ -162,10 +162,9 @@ class ExplorationTimeoutsTest(unittest.TestCase):
             stale.mission_id += 1
             activate(1, stale)
             activate(0)
-            ack_pub.publish(ControllerAck(context=context, trajectory_id=1, accepted=True))
             time.sleep(0.3)
             self.assertEqual(statuses[-1].state, MissionStatus.PREPARE_RETURN,
-                             'ACK, zero ID, stale task or unactivated GOAL_REACHED advanced return')
+                             'zero ID, stale task or unactivated GOAL_REACHED advanced return')
             current['planner_state'] = PlannerStatus.PLANNING
             first_attempt = len(commands)
             self.wait_for(lambda: replan_since(first_attempt),
@@ -196,10 +195,8 @@ class ExplorationTimeoutsTest(unittest.TestCase):
             activate(3)
             self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING, 'output recovery failed')
 
-            # Old activation/goal messages cannot roll back the executing ID;
-            # an ACK for a future candidate cannot replace it either.
+            # Old activation/goal messages cannot roll back the executing ID.
             activate(2)
-            ack_pub.publish(ControllerAck(context=context, trajectory_id=4, accepted=True))
             current.update(planner_state=PlannerStatus.GOAL_REACHED, trajectory_id=2)
             time.sleep(0.5)
             self.assertNotEqual(statuses[-1].state, MissionStatus.HOME_HOLD,
@@ -207,6 +204,36 @@ class ExplorationTimeoutsTest(unittest.TestCase):
             current['trajectory_id'] = 3
             self.wait_for(lambda: statuses[-1].state == MissionStatus.HOME_HOLD,
                           'matching ACTIVE/GOAL_REACHED and stable home did not complete')
+
+            # An arrival withdrawn late in the stable time restarts all of it, even when the
+            # withdrawal and the next confirmation fall between two manager timer ticks.
+            context = begin()
+            current.update(planner_state=PlannerStatus.EXECUTING, trajectory_id=1)
+            activate(1)
+            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING, 'ACTIVE ignored')
+            current['planner_state'] = PlannerStatus.GOAL_REACHED
+            time.sleep(STABLE_TIME - 0.1)
+            self.assertNotEqual(statuses[-1].state, MissionStatus.HOME_HOLD, 'stable time ended early')
+            for state in (PlannerStatus.EXECUTING, PlannerStatus.GOAL_REACHED):
+                planner_pub.publish(PlannerStatus(header=Header(stamp=rospy.Time.now()), context=context,
+                                                  trajectory_id=1, state=state))
+            confirmed = time.monotonic()
+            self.wait_for(lambda: statuses[-1].state == MissionStatus.HOME_HOLD,
+                          'confirmed home did not complete after the withdrawal')
+            self.assertGreaterEqual(time.monotonic() - confirmed, STABLE_TIME - 0.1,
+                                    'withdrawn arrival kept its earlier stable time')
+
+            # A finished reference that left the aircraft elsewhere must be replanned, not awaited.
+            begin()
+            current.update(x=1.0, planner_state=PlannerStatus.EXECUTING, trajectory_id=1)
+            activate(1)
+            self.wait_for(lambda: statuses[-1].state == MissionStatus.RETURNING, 'ACTIVE ignored')
+            checkpoint = len(commands)
+            current['planner_state'] = PlannerStatus.GOAL_REACHED
+            self.wait_for(lambda: replan_since(checkpoint),
+                          'finished reference away from home was not replanned')
+            self.assertEqual(statuses[-1].state, MissionStatus.RETURN_RECOVERY)
+            current['x'] = 0.0
 
             # A new batch must re-enable the initial deadline.
             begin()
@@ -228,4 +255,4 @@ class ExplorationTimeoutsTest(unittest.TestCase):
 
 if __name__ == '__main__':
     rospy.init_node('test_exploration_timeouts')
-    rostest.rosrun('prometheus_fuel', 'exploration_timeouts', ExplorationTimeoutsTest)
+    rostest.rosrun('fuel_bridge', 'exploration_timeouts', ExplorationTimeoutsTest)

@@ -15,21 +15,25 @@
         <rosparam file="$(find ekf)/launch/PX4_vio_drone.yaml" command="load" />
 
         <!-- initial pos offset before pub-->
-        <param name="offset_px" type="double" value="0.0"/> 
+        <!-- 输出位姿的初始位置偏移（m） -->
+        <param name="offset_px" type="double" value="0.0"/>
         <param name="offset_py" type="double" value="0.0"/> 
         <param name="offset_pz" type="double" value="0.0"/> 
         
         <!--body in IMU frame-->
-        <param name="imu_trans_x" type="double" value="0.0"/> 
+        <!-- 机体原点在 IMU 坐标系中的位置（m），未标定；与 PX4_vio_drone.yaml 的 tr_i 填同一向量 -->
+        <param name="imu_trans_x" type="double" value="0.0"/>
         <param name="imu_trans_y" type="double" value="0.0"/> 
         <!-- <param name="imu_trans_z" type="double" value="0.0"/>  -->
         <param name="imu_trans_z" type="double" value="0.0"/> 
 
         <!-- Qt -->
         <!-- kdkdkd -->
+        <!-- 过程噪声：陀螺仪、加速度计 -->
         <param name="gyro_cov" type="double" value="0.05"/> 
         <param name="acc_cov" type="double" value="0.20"/>
         <!-- Rt -->
+        <!-- 观测噪声：LIO 位置、横滚俯仰、偏航；cutoff_freq 为低通滤波截止频率（Hz） -->
         <param name="position_cov" type="double" value="0.01"/>
         <param name="q_rp_cov" type="double" value="0.01"/>
         <param name="q_yaw_cov" type="double" value="0.01"/>   

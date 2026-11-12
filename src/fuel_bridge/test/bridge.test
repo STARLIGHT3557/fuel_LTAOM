@@ -1,16 +1,17 @@
 <launch>
   <group ns="fuel">
-    <node pkg="prometheus_fuel" type="mission_manager_node" name="mission_manager" required="true">
-      <rosparam command="load" file="$(find prometheus_fuel)/config/mission.yaml"/>
+    <node pkg="fuel_bridge" type="mission_manager_node" name="mission_manager" required="true">
+      <rosparam command="load" file="$(find fuel_bridge)/config/mission.yaml"/>
       <param name="return_home/stable_time" value="0.2"/>
       <param name="battery/data_timeout" value="1.0"/>
       <!-- This test exercises the 30% boundary independently of flight tuning. -->
       <param name="battery/return_threshold" value="0.30"/>
       <remap from="goal" to="/move_base_simple/goal"/>
     </node>
-    <node pkg="prometheus_fuel" type="fuel_bridge" name="bridge" required="true">
-      <rosparam command="load" file="$(find prometheus_fuel)/config/bridge.yaml"/>
-      <rosparam command="load" file="$(find prometheus_fuel)/test/sensor_fixture.yaml"/>
+    <node pkg="fuel_bridge" type="fuel_bridge" name="bridge" required="true">
+      <rosparam command="load" file="$(find fuel_bridge)/config/bridge.yaml"/>
+      <rosparam command="load" file="$(find fuel_bridge)/test/sensor_fixture.yaml"/>
+      <rosparam command="load" file="$(find fuel_bridge)/config/view_crop.yaml"/>
       <param name="box_min_x" value="-1.0"/>
       <param name="box_min_y" value="-11.0"/>
       <param name="box_min_z" value="0.5"/>
@@ -19,5 +20,5 @@
       <param name="box_max_z" value="2.5"/>
     </node>
   </group>
-  <test test-name="fuel_bridge_contract" pkg="prometheus_fuel" type="test_bridge.py" time-limit="45"/>
+  <test test-name="fuel_bridge_contract" pkg="fuel_bridge" type="test_bridge.py" time-limit="45"/>
 </launch>

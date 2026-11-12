@@ -10,18 +10,13 @@ k_vel:
   y: 3.0
   z: 4.0
 
-hover_percentage: 0.70
+hover_percentage: 0.45
 estimate_thrust: true
-hover_suggest: true
-hover_stable_tol: 0.005
-hover_stable_secs: 3.0
 max_a_fb: 8.0
 gravity: 9.81
 
 control_rate_hz: 100.0
-feedback_timeout: 0.5
-state_timeout: 2.0
-timestamp_future_tolerance: 0.05 # 允许消息源时间戳最多超前本机时间 50 ms。
+timestamp_future_tolerance: 0.05 # 允许轨迹点时间戳最多超前本机时间 50 ms。
 setpoint_topic: /uav_controller/trajectory_setpoint
 
 print_tracking: true

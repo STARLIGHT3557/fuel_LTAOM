@@ -1,0 +1,14 @@
+<launch>
+  <arg name="pcd_file"/>
+  <arg name="frame_id" default="map"/>
+
+  <node pkg="pcl_ros" type="pcd_to_pointcloud" name="saved_pcd_publisher"
+        args="$(arg pcd_file) 1.0" output="screen">
+    <param name="frame_id" value="$(arg frame_id)"/>
+    <remap from="cloud_pcd" to="/saved_map/points"/>
+  </node>
+
+  <node pkg="rviz" type="rviz" name="saved_pcd_rviz"
+        args="-d $(find fuel_bridge)/config/saved_pcd.rviz -f $(arg frame_id)"
+        output="screen"/>
+</launch>
