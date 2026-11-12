@@ -1,0 +1,2041 @@
+lidar_buf size: 2 waiting to process
+
+Key frame:0, cloud size:117603
+proj_plane_list.size(): 38
+merge_plane_list.size(): 37
+elapsed_ms aft generate std: 48.5175
+[interT] corners sizes: 29 0
+-1 0 2
+[Corner] corner size:29  descriptor size:1348
+[Rough match] rough match frame:17 match size:14
+Fine sucess, Fine size:5  ,Icp score:0.75321, score:0.75821
+[Rough match] rough match frame:22 match size:13
+[Rough match] rough match frame:7 match size:11
+[Rough match] rough match frame:20 match size:11
+[Rough match] rough match frame:24 match size:11
+[Rough match] rough match frame:27 match size:11
+[Rough match] rough match frame:30 match size:11
+[Rough match] rough match frame:33 match size:9
+[Rough match] rough match frame:28 match size:8
+[Rough match] rough match frame:29 match size:8
+[Loop Sucess] 0--17, candidate id:0, icp:0.75821
+-18 0 30
+[Loop Info] rough size:14, match size:5, rough triangle dis:0.780697, fine triangle dis:0.00642934, rough binary similarity:0.780697, fine binary similarity:0.845772
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:1, cloud size:90567
+proj_plane_list.size(): 68
+merge_plane_list.size(): 65
+elapsed_ms aft generate std: 29.2891
+[interT] corners sizes: 65 29
+0 1 6
+[Corner] corner size:65  descriptor size:3117
+[Loop Fail] 1, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:2, cloud size:138354
+proj_plane_list.size(): 78
+merge_plane_list.size(): 75
+elapsed_ms aft generate std: 61.5912
+[interT] corners sizes: 100 65
+1 2 22
+[interT2] corners sizes: 100 0
+0 2 2
+[Corner] corner size:100  descriptor size:5198
+[Rough match] rough match frame:30 match size:26
+[Rough match] rough match frame:12 match size:21
+[Rough match] rough match frame:27 match size:21
+[Rough match] rough match frame:33 match size:18
+[Rough match] rough match frame:28 match size:17
+[Rough match] rough match frame:7 match size:15
+[Rough match] rough match frame:24 match size:13
+[Rough match] rough match frame:13 match size:10
+[Rough match] rough match frame:3 match size:8
+[Rough match] rough match frame:19 match size:8
+[Loop Fail] 2, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:3, cloud size:522032
+proj_plane_list.size(): 36
+merge_plane_list.size(): 33
+elapsed_ms aft generate std: 128.704
+[interT] corners sizes: 38 100
+2 3 14
+[interT2] corners sizes: 38 65
+1 3 4
+[Corner] corner size:38  descriptor size:1989
+[Rough match] rough match frame:7 match size:14
+Fine sucess, Fine size:4  ,Icp score:0.602426, score:0.606426
+[Rough match] rough match frame:12 match size:12
+[Rough match] rough match frame:16 match size:11
+[Rough match] rough match frame:33 match size:11
+Fine sucess, Fine size:4  ,Icp score:0.954917, score:0.958917
+[Rough match] rough match frame:13 match size:10
+[Rough match] rough match frame:24 match size:10
+[Rough match] rough match frame:28 match size:10
+[Rough match] rough match frame:22 match size:9
+[Rough match] rough match frame:20 match size:7
+[Rough match] rough match frame:27 match size:7
+Fine sucess, Fine size:4  ,Icp score:0.868706, score:0.872706
+[Loop Sucess] 3--33, candidate id:3, icp:0.958917
+-34 3 24
+[Loop Info] rough size:11, match size:4, rough triangle dis:0.766255, fine triangle dis:0.0032299, rough binary similarity:0.766255, fine binary similarity:0.813735
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:4, cloud size:1877608
+proj_plane_list.size(): 35
+merge_plane_list.size(): 34
+elapsed_ms aft generate std: 467.001
+[interT] corners sizes: 26 38
+3 4 20
+[interT2] corners sizes: 26 100
+2 4 6
+[Corner] corner size:26  descriptor size:1065
+[Rough match] rough match frame:7 match size:8
+Fine sucess, Fine size:6  ,Icp score:0.668659, score:0.674659
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:17 match size:4
+[Loop Sucess] 4--7, candidate id:0, icp:0.674659
+-8 4 36
+[Loop Info] rough size:8, match size:6, rough triangle dis:0.739177, fine triangle dis:0.00604212, rough binary similarity:0.739177, fine binary similarity:0.833902
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:5, cloud size:874112
+proj_plane_list.size(): 35
+merge_plane_list.size(): 35
+elapsed_ms aft generate std: 257.326
+[interT] corners sizes: 28 26
+4 5 22
+[interT2] corners sizes: 28 38
+3 5 22
+[Corner] corner size:28  descriptor size:1311
+[Rough match] rough match frame:7 match size:11
+Fine sucess, Fine size:4  ,Icp score:0.703896, score:0.707896
+[Rough match] rough match frame:27 match size:11
+Fine sucess, Fine size:5  ,Icp score:0.828457, score:0.833457
+[Rough match] rough match frame:17 match size:9
+[Rough match] rough match frame:20 match size:9
+[Rough match] rough match frame:33 match size:9
+Fine sucess, Fine size:4  ,Icp score:0.920916, score:0.924916
+[Rough match] rough match frame:13 match size:7
+[Rough match] rough match frame:19 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:12 match size:5
+[Rough match] rough match frame:16 match size:5
+[Loop Sucess] 5--33, candidate id:4, icp:0.924916
+-34 5 24
+[Loop Info] rough size:9, match size:4, rough triangle dis:0.749867, fine triangle dis:0.00548447, rough binary similarity:0.749867, fine binary similarity:0.779605
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:6, cloud size:62688
+proj_plane_list.size(): 38
+merge_plane_list.size(): 36
+elapsed_ms aft generate std: 40.8931
+[interT] corners sizes: 51 28
+5 6 12
+[interT2] corners sizes: 51 26
+4 6 6
+[Corner] corner size:51  descriptor size:2822
+[Rough match] rough match frame:28 match size:21
+Fine sucess, Fine size:6  ,Icp score:0.727792, score:0.733792
+[Rough match] rough match frame:33 match size:18
+Fine sucess, Fine size:6  ,Icp score:0.844156, score:0.850156
+[Rough match] rough match frame:27 match size:16
+Fine sucess, Fine size:4  ,Icp score:0.801558, score:0.805558
+[Rough match] rough match frame:24 match size:15
+[Rough match] rough match frame:12 match size:14
+[Rough match] rough match frame:13 match size:13
+[Rough match] rough match frame:21 match size:12
+[Rough match] rough match frame:29 match size:10
+[Rough match] rough match frame:11 match size:7
+[Rough match] rough match frame:16 match size:7
+[Loop Sucess] 6--33, candidate id:1, icp:0.850156
+-34 6 36
+[Loop Info] rough size:18, match size:6, rough triangle dis:0.777848, fine triangle dis:0.0071897, rough binary similarity:0.777848, fine binary similarity:0.765966
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:7, cloud size:32685
+proj_plane_list.size(): 20
+merge_plane_list.size(): 19
+elapsed_ms aft generate std: 23.9971
+[interT] corners sizes: 40 51
+6 7 16
+[interT2] corners sizes: 40 28
+5 7 6
+[Corner] corner size:40  descriptor size:1731
+[Rough match] rough match frame:3 match size:9
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:6 match size:5
+[Rough match] rough match frame:28 match size:5
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 7, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:8, cloud size:48776
+proj_plane_list.size(): 25
+merge_plane_list.size(): 24
+elapsed_ms aft generate std: 41.0232
+[interT] corners sizes: 18 40
+7 8 12
+[interT2] corners sizes: 18 51
+6 8 6
+[Corner] corner size:18  descriptor size:711
+[Rough match] rough match frame:28 match size:11
+[Rough match] rough match frame:29 match size:7
+[Rough match] rough match frame:19 match size:6
+[Rough match] rough match frame:13 match size:5
+[Rough match] rough match frame:20 match size:5
+[Rough match] rough match frame:22 match size:5
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:24 match size:4
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 8, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:9, cloud size:87860
+proj_plane_list.size(): 30
+merge_plane_list.size(): 28
+elapsed_ms aft generate std: 52.4891
+[interT] corners sizes: 30 18
+8 9 12
+[interT2] corners sizes: 30 40
+7 9 8
+[Corner] corner size:30  descriptor size:1341
+[Rough match] rough match frame:28 match size:15
+[Rough match] rough match frame:30 match size:14
+[Rough match] rough match frame:19 match size:13
+[Rough match] rough match frame:7 match size:12
+[Rough match] rough match frame:20 match size:12
+[Rough match] rough match frame:24 match size:12
+[Rough match] rough match frame:3 match size:11
+[Rough match] rough match frame:11 match size:10
+[Rough match] rough match frame:21 match size:10
+[Rough match] rough match frame:29 match size:10
+[Loop Fail] 9, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:10, cloud size:79614
+proj_plane_list.size(): 16
+merge_plane_list.size(): 15
+elapsed_ms aft generate std: 39.3508
+[interT] corners sizes: 20 30
+9 10 8
+[interT2] corners sizes: 20 18
+8 10 6
+[Corner] corner size:20  descriptor size:834
+[Rough match] rough match frame:3 match size:10
+[Rough match] rough match frame:28 match size:9
+[Rough match] rough match frame:16 match size:8
+[Rough match] rough match frame:17 match size:7
+[Rough match] rough match frame:19 match size:6
+[Rough match] rough match frame:33 match size:6
+[Rough match] rough match frame:12 match size:5
+[Rough match] rough match frame:22 match size:5
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:0 match size:4
+[Loop Fail] 10, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:11, cloud size:73939
+proj_plane_list.size(): 26
+merge_plane_list.size(): 22
+elapsed_ms aft generate std: 37.8988
+[interT] corners sizes: 25 20
+10 11 12
+[interT2] corners sizes: 25 30
+9 11 16
+[Corner] corner size:25  descriptor size:1106
+[Rough match] rough match frame:12 match size:13
+[Rough match] rough match frame:17 match size:8
+[Rough match] rough match frame:11 match size:6
+[Rough match] rough match frame:29 match size:6
+[Rough match] rough match frame:30 match size:6
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:5 match size:4
+[Rough match] rough match frame:7 match size:4
+[Rough match] rough match frame:22 match size:4
+[Rough match] rough match frame:24 match size:4
+[Loop Fail] 11, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:12, cloud size:71067
+proj_plane_list.size(): 24
+merge_plane_list.size(): 23
+elapsed_ms aft generate std: 37.7015
+[interT] corners sizes: 22 25
+11 12 12
+[interT2] corners sizes: 22 20
+10 12 14
+[Corner] corner size:22  descriptor size:903
+[Rough match] rough match frame:7 match size:6
+[Rough match] rough match frame:28 match size:6
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:30 match size:5
+[Rough match] rough match frame:13 match size:4
+[Rough match] rough match frame:17 match size:4
+[Rough match] rough match frame:24 match size:4
+[Loop Fail] 12, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:13, cloud size:80738
+proj_plane_list.size(): 33
+merge_plane_list.size(): 29
+elapsed_ms aft generate std: 47.9793
+[interT] corners sizes: 33 22
+12 13 10
+[interT2] corners sizes: 33 25
+11 13 6
+[Corner] corner size:33  descriptor size:1660
+[Rough match] rough match frame:7 match size:11
+Fine sucess, Fine size:4  ,Icp score:0.771623, score:0.775623
+[Rough match] rough match frame:13 match size:10
+[Rough match] rough match frame:19 match size:9
+[Rough match] rough match frame:12 match size:7
+[Rough match] rough match frame:28 match size:7
+[Rough match] rough match frame:30 match size:7
+[Rough match] rough match frame:33 match size:6
+[Rough match] rough match frame:17 match size:5
+[Loop Sucess] 13--7, candidate id:0, icp:0.775623
+-8 13 24
+[Loop Info] rough size:11, match size:4, rough triangle dis:0.786402, fine triangle dis:0.00515826, rough binary similarity:0.786402, fine binary similarity:0.757031
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:14, cloud size:89163
+proj_plane_list.size(): 30
+merge_plane_list.size(): 27
+elapsed_ms aft generate std: 58.0566
+[interT] corners sizes: 52 33
+13 14 10
+[interT2] corners sizes: 52 22
+12 14 6
+[Corner] corner size:52  descriptor size:2649
+[Rough match] rough match frame:28 match size:24
+[Rough match] rough match frame:3 match size:21
+Fine sucess, Fine size:4  ,Icp score:0.681601, score:0.685601
+[Rough match] rough match frame:12 match size:20
+[Rough match] rough match frame:29 match size:19
+[Rough match] rough match frame:24 match size:17
+[Rough match] rough match frame:16 match size:16
+[Rough match] rough match frame:27 match size:16
+[Rough match] rough match frame:11 match size:15
+[Rough match] rough match frame:13 match size:15
+[Rough match] rough match frame:21 match size:14
+[Loop Sucess] 14--3, candidate id:1, icp:0.685601
+-4 14 24
+[Loop Info] rough size:21, match size:4, rough triangle dis:0.791063, fine triangle dis:0.0056695, rough binary similarity:0.791063, fine binary similarity:0.760985
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:15, cloud size:54721
+proj_plane_list.size(): 14
+merge_plane_list.size(): 14
+elapsed_ms aft generate std: 32.439
+[interT] corners sizes: 30 52
+14 15 2
+[interT2] corners sizes: 30 33
+13 15 4
+[Corner] corner size:30  descriptor size:1327
+[Loop Fail] 15, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:16, cloud size:79584
+proj_plane_list.size(): 25
+merge_plane_list.size(): 24
+elapsed_ms aft generate std: 51.9072
+[interT] corners sizes: 33 30
+15 16 22
+[interT2] corners sizes: 33 52
+14 16 10
+[Corner] corner size:33  descriptor size:1519
+[Rough match] rough match frame:11 match size:7
+[Rough match] rough match frame:13 match size:7
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:7 match size:5
+[Rough match] rough match frame:28 match size:5
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 16, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:17, cloud size:86112
+proj_plane_list.size(): 85
+merge_plane_list.size(): 61
+elapsed_ms aft generate std: 98.5707
+[interT] corners sizes: 53 33
+16 17 8
+[interT2] corners sizes: 53 30
+15 17 4
+[Corner] corner size:53  descriptor size:2728
+[Loop Fail] 17, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:18, cloud size:69776
+proj_plane_list.size(): 44
+merge_plane_list.size(): 31
+elapsed_ms aft generate std: 57.8566
+[interT] corners sizes: 46 53
+17 18 2
+[interT2] corners sizes: 46 33
+16 18 2
+[Corner] corner size:46  descriptor size:2298
+[Rough match] rough match frame:27 match size:19
+[Rough match] rough match frame:3 match size:17
+Fine sucess, Fine size:4  ,Icp score:0.136849, score:0.140849
+[Rough match] rough match frame:16 match size:10
+[Rough match] rough match frame:19 match size:10
+[Rough match] rough match frame:21 match size:8
+[Rough match] rough match frame:29 match size:8
+[Rough match] rough match frame:11 match size:7
+[Rough match] rough match frame:0 match size:6
+[Rough match] rough match frame:5 match size:6
+[Rough match] rough match frame:20 match size:6
+[Loop Fail] 18, icp:0.140849
+lidar_buf size: 1 waiting to process
+
+Key frame:19, cloud size:104594
+proj_plane_list.size(): 73
+merge_plane_list.size(): 56
+elapsed_ms aft generate std: 87.897
+[interT] corners sizes: 54 46
+18 19 14
+[interT2] corners sizes: 54 53
+17 19 2
+[Corner] corner size:54  descriptor size:2685
+[Rough match] rough match frame:27 match size:10
+[Rough match] rough match frame:21 match size:9
+[Rough match] rough match frame:28 match size:9
+[Rough match] rough match frame:13 match size:8
+[Rough match] rough match frame:26 match size:8
+[Rough match] rough match frame:0 match size:7
+[Rough match] rough match frame:3 match size:7
+[Rough match] rough match frame:29 match size:7
+[Rough match] rough match frame:9 match size:6
+[Rough match] rough match frame:11 match size:6
+[Loop Fail] 19, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:20, cloud size:72094
+proj_plane_list.size(): 26
+merge_plane_list.size(): 22
+elapsed_ms aft generate std: 58.4264
+[interT] corners sizes: 71 54
+19 20 18
+[interT2] corners sizes: 71 46
+18 20 16
+[Corner] corner size:71  descriptor size:3431
+[Rough match] rough match frame:29 match size:16
+[Rough match] rough match frame:11 match size:15
+[Rough match] rough match frame:16 match size:13
+Fine sucess, Fine size:5  ,Icp score:0.58449, score:0.58949
+[Rough match] rough match frame:3 match size:12
+[Rough match] rough match frame:30 match size:12
+[Rough match] rough match frame:27 match size:11
+[Rough match] rough match frame:13 match size:10
+[Rough match] rough match frame:28 match size:9
+[Rough match] rough match frame:7 match size:8
+[Rough match] rough match frame:6 match size:6
+[Loop Sucess] 20--16, candidate id:2, icp:0.58949
+-17 20 30
+[Loop Info] rough size:13, match size:5, rough triangle dis:0.767899, fine triangle dis:0.00504243, rough binary similarity:0.767899, fine binary similarity:0.768569
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:21, cloud size:51637
+proj_plane_list.size(): 27
+merge_plane_list.size(): 17
+elapsed_ms aft generate std: 44.1869
+[interT] corners sizes: 59 71
+20 21 14
+[interT2] corners sizes: 59 54
+19 21 6
+[Corner] corner size:59  descriptor size:2929
+[Rough match] rough match frame:28 match size:4
+[Loop Fail] 21, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:22, cloud size:57645
+proj_plane_list.size(): 67
+merge_plane_list.size(): 49
+elapsed_ms aft generate std: 72.6078
+[interT] corners sizes: 44 59
+21 22 14
+[interT2] corners sizes: 44 71
+20 22 4
+[Corner] corner size:44  descriptor size:2184
+[Rough match] rough match frame:0 match size:6
+[Loop Fail] 22, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:23, cloud size:145735
+proj_plane_list.size(): 116
+merge_plane_list.size(): 86
+elapsed_ms aft generate std: 125.766
+[interT] corners sizes: 46 44
+22 23 6
+[interT2] corners sizes: 46 59
+21 23 12
+[Corner] corner size:46  descriptor size:2354
+[Rough match] rough match frame:10 match size:8
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:20 match size:4
+[Rough match] rough match frame:21 match size:4
+[Loop Fail] 23, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:24, cloud size:98056
+proj_plane_list.size(): 16
+merge_plane_list.size(): 13
+elapsed_ms aft generate std: 67.9031
+[interT] corners sizes: 35 46
+23 24 6
+[interT2] corners sizes: 35 44
+22 24 4
+[Corner] corner size:35  descriptor size:1645
+[Rough match] rough match frame:27 match size:8
+[Rough match] rough match frame:30 match size:7
+[Rough match] rough match frame:0 match size:6
+[Rough match] rough match frame:5 match size:6
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:20 match size:4
+[Rough match] rough match frame:29 match size:4
+[Loop Fail] 24, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:25, cloud size:83260
+proj_plane_list.size(): 36
+merge_plane_list.size(): 27
+elapsed_ms aft generate std: 46.4294
+[interT] corners sizes: 48 35
+24 25 30
+[interT2] corners sizes: 48 46
+23 25 12
+[Corner] corner size:48  descriptor size:2357
+[Rough match] rough match frame:27 match size:15
+[Rough match] rough match frame:3 match size:9
+[Rough match] rough match frame:28 match size:7
+[Rough match] rough match frame:0 match size:6
+[Rough match] rough match frame:6 match size:6
+[Rough match] rough match frame:10 match size:6
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:26 match size:5
+[Rough match] rough match frame:19 match size:4
+[Rough match] rough match frame:20 match size:4
+[Loop Fail] 25, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:26, cloud size:66623
+proj_plane_list.size(): 28
+merge_plane_list.size(): 23
+elapsed_ms aft generate std: 56.8644
+[interT] corners sizes: 40 48
+25 26 10
+[interT2] corners sizes: 40 35
+24 26 8
+[Corner] corner size:40  descriptor size:1975
+[Rough match] rough match frame:3 match size:14
+[Rough match] rough match frame:27 match size:11
+[Rough match] rough match frame:30 match size:9
+[Rough match] rough match frame:16 match size:6
+[Rough match] rough match frame:28 match size:6
+[Rough match] rough match frame:29 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:5 match size:5
+[Rough match] rough match frame:6 match size:5
+[Rough match] rough match frame:7 match size:5
+[Loop Fail] 26, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:27, cloud size:78385
+proj_plane_list.size(): 39
+merge_plane_list.size(): 29
+elapsed_ms aft generate std: 59.051
+[interT] corners sizes: 32 40
+26 27 16
+[interT2] corners sizes: 32 48
+25 27 14
+[Corner] corner size:32  descriptor size:1467
+[Rough match] rough match frame:27 match size:7
+[Rough match] rough match frame:22 match size:5
+[Loop Fail] 27, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:28, cloud size:74904
+proj_plane_list.size(): 70
+merge_plane_list.size(): 43
+elapsed_ms aft generate std: 71.0009
+[interT] corners sizes: 39 32
+27 28 6
+[interT2] corners sizes: 39 40
+26 28 12
+[Corner] corner size:39  descriptor size:1924
+[Rough match] rough match frame:28 match size:4
+[Loop Fail] 28, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:29, cloud size:56582
+proj_plane_list.size(): 78
+merge_plane_list.size(): 54
+elapsed_ms aft generate std: 45.033
+[interT] corners sizes: 28 39
+28 29 2
+[interT2] corners sizes: 28 32
+27 29 2
+[Corner] corner size:28  descriptor size:1234
+[Loop Fail] 29, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:30, cloud size:89148
+proj_plane_list.size(): 61
+merge_plane_list.size(): 45
+elapsed_ms aft generate std: 87.6033
+[interT] corners sizes: 40 28
+29 30 2
+[interT2] corners sizes: 40 39
+28 30 14
+[Corner] corner size:40  descriptor size:1891
+[Rough match] rough match frame:3 match size:6
+[Rough match] rough match frame:17 match size:5
+[Rough match] rough match frame:20 match size:5
+[Rough match] rough match frame:30 match size:5
+[Rough match] rough match frame:10 match size:4
+[Rough match] rough match frame:11 match size:4
+[Rough match] rough match frame:21 match size:4
+[Loop Fail] 30, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:31, cloud size:67382
+proj_plane_list.size(): 42
+merge_plane_list.size(): 31
+elapsed_ms aft generate std: 58.6292
+[interT] corners sizes: 66 40
+30 31 10
+[interT2] corners sizes: 66 28
+29 31 2
+[Corner] corner size:66  descriptor size:3225
+[Rough match] rough match frame:3 match size:12
+[Rough match] rough match frame:19 match size:11
+[Rough match] rough match frame:6 match size:10
+[Rough match] rough match frame:20 match size:10
+[Rough match] rough match frame:21 match size:9
+[Rough match] rough match frame:27 match size:9
+[Rough match] rough match frame:7 match size:8
+[Rough match] rough match frame:16 match size:8
+[Rough match] rough match frame:29 match size:8
+[Rough match] rough match frame:24 match size:7
+[Loop Fail] 31, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:32, cloud size:59381
+proj_plane_list.size(): 25
+merge_plane_list.size(): 19
+elapsed_ms aft generate std: 31.9414
+[interT] corners sizes: 48 66
+31 32 10
+[interT2] corners sizes: 48 40
+30 32 2
+[Corner] corner size:48  descriptor size:2239
+[Loop Fail] 32, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:33, cloud size:43601
+proj_plane_list.size(): 19
+merge_plane_list.size(): 14
+elapsed_ms aft generate std: 37.4717
+[interT] corners sizes: 33 48
+32 33 4
+[interT2] corners sizes: 33 66
+31 33 6
+[Corner] corner size:33  descriptor size:1611
+[Loop Fail] 33, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:34, cloud size:43698
+proj_plane_list.size(): 28
+merge_plane_list.size(): 17
+elapsed_ms aft generate std: 34.0626
+[interT] corners sizes: 38 33
+33 34 4
+[interT2] corners sizes: 38 48
+32 34 2
+[Corner] corner size:38  descriptor size:1852
+[Rough match] rough match frame:30 match size:7
+[Rough match] rough match frame:10 match size:6
+[Rough match] rough match frame:28 match size:6
+[Rough match] rough match frame:21 match size:5
+[Rough match] rough match frame:11 match size:4
+[Rough match] rough match frame:26 match size:4
+[Loop Fail] 34, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:35, cloud size:45161
+proj_plane_list.size(): 24
+merge_plane_list.size(): 17
+elapsed_ms aft generate std: 36.5801
+[interT] corners sizes: 37 38
+34 35 10
+[interT2] corners sizes: 37 33
+33 35 8
+[Corner] corner size:37  descriptor size:1741
+[Rough match] rough match frame:3 match size:4
+[Rough match] rough match frame:26 match size:4
+[Loop Fail] 35, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:36, cloud size:60777
+proj_plane_list.size(): 12
+merge_plane_list.size(): 11
+elapsed_ms aft generate std: 29.3454
+[interT] corners sizes: 54 37
+35 36 10
+[interT2] corners sizes: 54 38
+34 36 6
+[Corner] corner size:54  descriptor size:2605
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:28 match size:6
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:1 match size:4
+[Rough match] rough match frame:17 match size:4
+[Rough match] rough match frame:22 match size:4
+[Rough match] rough match frame:29 match size:4
+[Loop Fail] 36, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:37, cloud size:90016
+proj_plane_list.size(): 16
+merge_plane_list.size(): 12
+elapsed_ms aft generate std: 77.514
+[interT] corners sizes: 60 54
+36 37 18
+[interT2] corners sizes: 60 37
+35 37 8
+[Corner] corner size:60  descriptor size:2860
+[Rough match] rough match frame:28 match size:17
+[Rough match] rough match frame:21 match size:10
+[Rough match] rough match frame:27 match size:10
+[Rough match] rough match frame:7 match size:9
+[Rough match] rough match frame:13 match size:9
+[Rough match] rough match frame:26 match size:9
+[Rough match] rough match frame:20 match size:8
+[Rough match] rough match frame:6 match size:7
+[Rough match] rough match frame:22 match size:6
+[Rough match] rough match frame:3 match size:5
+[Loop Fail] 37, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:38, cloud size:92064
+proj_plane_list.size(): 18
+merge_plane_list.size(): 17
+elapsed_ms aft generate std: 73.3563
+[interT] corners sizes: 59 60
+37 38 12
+[interT2] corners sizes: 59 54
+36 38 10
+[Corner] corner size:59  descriptor size:3044
+[Rough match] rough match frame:12 match size:15
+[Rough match] rough match frame:28 match size:15
+[Rough match] rough match frame:27 match size:14
+[Rough match] rough match frame:11 match size:13
+[Rough match] rough match frame:13 match size:13
+[Rough match] rough match frame:29 match size:13
+[Rough match] rough match frame:19 match size:11
+[Rough match] rough match frame:21 match size:11
+[Rough match] rough match frame:0 match size:10
+[Rough match] rough match frame:5 match size:9
+[Loop Fail] 38, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:39, cloud size:99206
+proj_plane_list.size(): 32
+merge_plane_list.size(): 24
+elapsed_ms aft generate std: 80.3255
+[interT] corners sizes: 60 59
+38 39 20
+[interT2] corners sizes: 60 60
+37 39 20
+[Corner] corner size:60  descriptor size:3097
+[Rough match] rough match frame:12 match size:22
+[Rough match] rough match frame:28 match size:19
+Fine sucess, Fine size:4  ,Icp score:0.721324, score:0.725324
+[Rough match] rough match frame:30 match size:16
+[Rough match] rough match frame:13 match size:15
+[Rough match] rough match frame:24 match size:13
+[Rough match] rough match frame:21 match size:12
+[Rough match] rough match frame:10 match size:10
+[Rough match] rough match frame:27 match size:9
+[Rough match] rough match frame:11 match size:8
+[Rough match] rough match frame:3 match size:7
+[Loop Sucess] 39--28, candidate id:1, icp:0.725324
+-29 39 24
+[Loop Info] rough size:19, match size:4, rough triangle dis:0.78666, fine triangle dis:0.00692601, rough binary similarity:0.78666, fine binary similarity:0.873976
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:40, cloud size:89841
+proj_plane_list.size(): 22
+merge_plane_list.size(): 22
+elapsed_ms aft generate std: 67.1131
+[interT] corners sizes: 50 60
+39 40 14
+[interT2] corners sizes: 50 59
+38 40 20
+[Corner] corner size:50  descriptor size:2437
+[Rough match] rough match frame:28 match size:20
+[Rough match] rough match frame:27 match size:16
+[Rough match] rough match frame:21 match size:14
+[Rough match] rough match frame:11 match size:9
+[Rough match] rough match frame:10 match size:8
+[Rough match] rough match frame:12 match size:7
+[Rough match] rough match frame:20 match size:7
+[Rough match] rough match frame:29 match size:6
+[Rough match] rough match frame:30 match size:6
+[Rough match] rough match frame:1 match size:5
+[Loop Fail] 40, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:41, cloud size:85224
+proj_plane_list.size(): 31
+merge_plane_list.size(): 18
+elapsed_ms aft generate std: 61.6159
+[interT] corners sizes: 47 50
+40 41 20
+[interT2] corners sizes: 47 60
+39 41 8
+[Corner] corner size:47  descriptor size:2302
+[Rough match] rough match frame:28 match size:14
+[Rough match] rough match frame:27 match size:9
+[Rough match] rough match frame:7 match size:8
+[Rough match] rough match frame:12 match size:6
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:22 match size:6
+[Rough match] rough match frame:11 match size:5
+[Rough match] rough match frame:20 match size:5
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:10 match size:4
+[Loop Fail] 41, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:42, cloud size:87989
+proj_plane_list.size(): 27
+merge_plane_list.size(): 23
+elapsed_ms aft generate std: 63.206
+[interT] corners sizes: 45 47
+41 42 22
+[interT2] corners sizes: 45 50
+40 42 14
+[Corner] corner size:45  descriptor size:2353
+[Rough match] rough match frame:27 match size:13
+[Rough match] rough match frame:3 match size:9
+[Rough match] rough match frame:28 match size:8
+[Rough match] rough match frame:9 match size:7
+[Rough match] rough match frame:26 match size:6
+[Rough match] rough match frame:29 match size:6
+[Rough match] rough match frame:19 match size:5
+[Rough match] rough match frame:21 match size:5
+[Rough match] rough match frame:10 match size:4
+[Rough match] rough match frame:20 match size:4
+[Loop Fail] 42, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:43, cloud size:91176
+proj_plane_list.size(): 21
+merge_plane_list.size(): 17
+elapsed_ms aft generate std: 59.4
+[interT] corners sizes: 37 45
+42 43 6
+[interT2] corners sizes: 37 47
+41 43 12
+[Corner] corner size:37  descriptor size:1869
+[Rough match] rough match frame:28 match size:21
+[Rough match] rough match frame:27 match size:17
+[Rough match] rough match frame:29 match size:17
+[Rough match] rough match frame:6 match size:16
+[Rough match] rough match frame:3 match size:13
+[Rough match] rough match frame:21 match size:12
+[Rough match] rough match frame:26 match size:10
+[Rough match] rough match frame:11 match size:8
+[Rough match] rough match frame:20 match size:8
+[Rough match] rough match frame:7 match size:7
+[Loop Fail] 43, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:44, cloud size:92604
+proj_plane_list.size(): 20
+merge_plane_list.size(): 17
+elapsed_ms aft generate std: 64.4248
+[interT] corners sizes: 37 37
+43 44 12
+[interT2] corners sizes: 37 45
+42 44 6
+[Corner] corner size:37  descriptor size:1670
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:10 match size:5
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:7 match size:4
+[Rough match] rough match frame:11 match size:4
+[Rough match] rough match frame:29 match size:4
+[Loop Fail] 44, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:45, cloud size:69717
+proj_plane_list.size(): 28
+merge_plane_list.size(): 22
+elapsed_ms aft generate std: 52.0869
+[interT] corners sizes: 53 37
+44 45 10
+[interT2] corners sizes: 53 37
+43 45 8
+[Corner] corner size:53  descriptor size:2497
+[Rough match] rough match frame:28 match size:8
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:30 match size:6
+[Rough match] rough match frame:22 match size:5
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:20 match size:4
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 45, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:46, cloud size:71958
+proj_plane_list.size(): 25
+merge_plane_list.size(): 22
+elapsed_ms aft generate std: 50.2249
+[interT] corners sizes: 54 53
+45 46 20
+[interT2] corners sizes: 54 37
+44 46 18
+[Corner] corner size:54  descriptor size:2605
+[Rough match] rough match frame:21 match size:9
+[Rough match] rough match frame:27 match size:6
+[Rough match] rough match frame:3 match size:4
+[Rough match] rough match frame:7 match size:4
+[Rough match] rough match frame:30 match size:4
+[Loop Fail] 46, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:47, cloud size:84066
+proj_plane_list.size(): 21
+merge_plane_list.size(): 19
+elapsed_ms aft generate std: 55.1841
+[interT] corners sizes: 55 54
+46 47 14
+[interT2] corners sizes: 55 53
+45 47 4
+[Corner] corner size:55  descriptor size:2534
+[Rough match] rough match frame:24 match size:8
+[Rough match] rough match frame:28 match size:8
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:22 match size:7
+[Rough match] rough match frame:29 match size:7
+[Rough match] rough match frame:3 match size:6
+[Rough match] rough match frame:12 match size:6
+[Rough match] rough match frame:7 match size:5
+[Rough match] rough match frame:17 match size:5
+[Rough match] rough match frame:13 match size:4
+[Loop Fail] 47, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:48, cloud size:75404
+proj_plane_list.size(): 25
+merge_plane_list.size(): 19
+elapsed_ms aft generate std: 44.2709
+[interT] corners sizes: 39 55
+47 48 20
+[interT2] corners sizes: 39 54
+46 48 8
+[Corner] corner size:39  descriptor size:1695
+[Rough match] rough match frame:16 match size:5
+[Loop Fail] 48, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:49, cloud size:70058
+proj_plane_list.size(): 13
+merge_plane_list.size(): 11
+elapsed_ms aft generate std: 40.9677
+[interT] corners sizes: 56 39
+48 49 8
+[interT2] corners sizes: 56 55
+47 49 4
+[Corner] corner size:56  descriptor size:2887
+[Rough match] rough match frame:27 match size:9
+[Rough match] rough match frame:21 match size:8
+[Rough match] rough match frame:3 match size:7
+[Rough match] rough match frame:5 match size:7
+[Rough match] rough match frame:7 match size:7
+[Rough match] rough match frame:28 match size:7
+[Rough match] rough match frame:12 match size:6
+[Rough match] rough match frame:16 match size:6
+[Rough match] rough match frame:29 match size:6
+[Rough match] rough match frame:30 match size:6
+[Loop Fail] 49, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:50, cloud size:90453
+proj_plane_list.size(): 70
+merge_plane_list.size(): 51
+elapsed_ms aft generate std: 95.9478
+[interT] corners sizes: 74 56
+49 50 24
+[interT2] corners sizes: 74 39
+48 50 4
+[Corner] corner size:74  descriptor size:3790
+[Rough match] rough match frame:28 match size:30
+Fine sucess, Fine size:5  ,Icp score:0.575313, score:0.580313
+[Rough match] rough match frame:30 match size:23
+[Rough match] rough match frame:0 match size:20
+[Rough match] rough match frame:12 match size:20
+[Rough match] rough match frame:19 match size:20
+[Rough match] rough match frame:16 match size:19
+[Rough match] rough match frame:29 match size:18
+[Rough match] rough match frame:3 match size:17
+[Rough match] rough match frame:24 match size:17
+[Rough match] rough match frame:27 match size:17
+[Loop Sucess] 50--28, candidate id:0, icp:0.580313
+-29 50 30
+[Loop Info] rough size:30, match size:5, rough triangle dis:0.770128, fine triangle dis:0.00488198, rough binary similarity:0.770128, fine binary similarity:0.795258
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:51, cloud size:96154
+proj_plane_list.size(): 42
+merge_plane_list.size(): 33
+elapsed_ms aft generate std: 84.326
+[interT] corners sizes: 64 74
+50 51 22
+[interT2] corners sizes: 64 56
+49 51 30
+[Corner] corner size:64  descriptor size:3327
+[Rough match] rough match frame:7 match size:40
+Fine sucess, Fine size:5  ,Icp score:0.525585, score:0.530585
+[Rough match] rough match frame:12 match size:40
+Fine sucess, Fine size:4  ,Icp score:0.736216, score:0.740216
+[Rough match] rough match frame:29 match size:33
+[Rough match] rough match frame:17 match size:31
+Fine sucess, Fine size:6  ,Icp score:0, score:0.006
+[Rough match] rough match frame:24 match size:31
+Fine sucess, Fine size:4  ,Icp score:0.477192, score:0.481192
+[Rough match] rough match frame:13 match size:29
+[Rough match] rough match frame:30 match size:29
+Fine sucess, Fine size:4  ,Icp score:0.656882, score:0.660882
+[Rough match] rough match frame:21 match size:28
+[Rough match] rough match frame:16 match size:27
+[Rough match] rough match frame:3 match size:25
+Fine sucess, Fine size:4  ,Icp score:0.689409, score:0.693409
+[Loop Sucess] 51--12, candidate id:1, icp:0.740216
+-13 51 24
+[Loop Info] rough size:40, match size:4, rough triangle dis:0.797291, fine triangle dis:0.00441759, rough binary similarity:0.797291, fine binary similarity:0.741326
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:52, cloud size:129904
+proj_plane_list.size(): 52
+merge_plane_list.size(): 45
+elapsed_ms aft generate std: 100.625
+[interT] corners sizes: 75 64
+51 52 46
+[interT2] corners sizes: 75 74
+50 52 32
+[Corner] corner size:75  descriptor size:3933
+[Rough match] rough match frame:28 match size:45
+[Rough match] rough match frame:3 match size:43
+[Rough match] rough match frame:16 match size:39
+Fine sucess, Fine size:6  ,Icp score:0.714662, score:0.720662
+[Rough match] rough match frame:29 match size:38
+Fine sucess, Fine size:4  ,Icp score:0.674568, score:0.678568
+[Rough match] rough match frame:7 match size:32
+Fine sucess, Fine size:5  ,Icp score:0.708224, score:0.713224
+[Rough match] rough match frame:24 match size:32
+[Rough match] rough match frame:12 match size:30
+[Rough match] rough match frame:30 match size:30
+[Rough match] rough match frame:19 match size:28
+[Rough match] rough match frame:13 match size:26
+[Loop Sucess] 52--16, candidate id:2, icp:0.720662
+-17 52 36
+[Loop Info] rough size:39, match size:6, rough triangle dis:0.79112, fine triangle dis:0.00421453, rough binary similarity:0.79112, fine binary similarity:0.78276
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:53, cloud size:61443
+proj_plane_list.size(): 50
+merge_plane_list.size(): 40
+elapsed_ms aft generate std: 52.09
+[interT] corners sizes: 52 75
+52 53 18
+[interT2] corners sizes: 52 64
+51 53 18
+[Corner] corner size:52  descriptor size:2381
+[Rough match] rough match frame:3 match size:22
+Fine sucess, Fine size:4  ,Icp score:0.619844, score:0.623844
+[Rough match] rough match frame:6 match size:18
+Fine sucess, Fine size:5  ,Icp score:0.607023, score:0.612023
+[Rough match] rough match frame:13 match size:15
+Fine sucess, Fine size:4  ,Icp score:0.000557414, score:0.00455741
+[Rough match] rough match frame:28 match size:14
+Fine sucess, Fine size:6  ,Icp score:0.343924, score:0.349924
+[Rough match] rough match frame:29 match size:14
+[Rough match] rough match frame:12 match size:12
+[Rough match] rough match frame:30 match size:12
+[Rough match] rough match frame:24 match size:11
+[Rough match] rough match frame:16 match size:9
+[Rough match] rough match frame:18 match size:8
+[Loop Sucess] 53--3, candidate id:0, icp:0.623844
+-4 53 24
+[Loop Info] rough size:22, match size:4, rough triangle dis:0.788174, fine triangle dis:0.0059954, rough binary similarity:0.788174, fine binary similarity:0.774535
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:54, cloud size:38952
+proj_plane_list.size(): 23
+merge_plane_list.size(): 20
+elapsed_ms aft generate std: 29.5033
+[interT] corners sizes: 27 52
+53 54 2
+[interT2] corners sizes: 27 75
+52 54 6
+[Corner] corner size:27  descriptor size:975
+[Loop Fail] 54, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:55, cloud size:106895
+proj_plane_list.size(): 40
+merge_plane_list.size(): 32
+elapsed_ms aft generate std: 84.4036
+[interT] corners sizes: 67 27
+54 55 4
+[interT2] corners sizes: 67 52
+53 55 4
+[Corner] corner size:67  descriptor size:3282
+[Rough match] rough match frame:16 match size:7
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:8 match size:4
+[Rough match] rough match frame:12 match size:4
+[Rough match] rough match frame:17 match size:4
+[Loop Fail] 55, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:56, cloud size:84066
+proj_plane_list.size(): 51
+merge_plane_list.size(): 40
+elapsed_ms aft generate std: 68.5155
+[interT] corners sizes: 65 67
+55 56 2
+[interT2] corners sizes: 65 27
+54 56 4
+[Corner] corner size:65  descriptor size:3084
+[Rough match] rough match frame:12 match size:12
+[Rough match] rough match frame:13 match size:10
+Fine sucess, Fine size:4  ,Icp score:0.849048, score:0.853048
+[Rough match] rough match frame:28 match size:9
+[Rough match] rough match frame:29 match size:9
+[Rough match] rough match frame:30 match size:9
+[Rough match] rough match frame:19 match size:8
+[Rough match] rough match frame:6 match size:7
+Fine sucess, Fine size:4  ,Icp score:0.822573, score:0.826573
+[Rough match] rough match frame:33 match size:7
+[Rough match] rough match frame:7 match size:6
+[Rough match] rough match frame:16 match size:6
+[Loop Sucess] 56--13, candidate id:1, icp:0.853048
+-14 56 24
+[Loop Info] rough size:10, match size:4, rough triangle dis:0.764649, fine triangle dis:0.00366329, rough binary similarity:0.764649, fine binary similarity:0.756065
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:57, cloud size:93654
+proj_plane_list.size(): 38
+merge_plane_list.size(): 31
+elapsed_ms aft generate std: 76.6385
+[interT] corners sizes: 67 65
+56 57 18
+[interT2] corners sizes: 67 67
+55 57 2
+[Corner] corner size:67  descriptor size:3304
+[Rough match] rough match frame:3 match size:28
+Fine sucess, Fine size:5  ,Icp score:0.738085, score:0.743085
+[Rough match] rough match frame:12 match size:23
+[Rough match] rough match frame:27 match size:21
+[Rough match] rough match frame:29 match size:20
+[Rough match] rough match frame:13 match size:18
+Fine sucess, Fine size:5  ,Icp score:0.857439, score:0.862439
+[Rough match] rough match frame:30 match size:16
+[Rough match] rough match frame:7 match size:15
+[Rough match] rough match frame:17 match size:15
+[Rough match] rough match frame:19 match size:13
+[Rough match] rough match frame:11 match size:11
+[Loop Sucess] 57--13, candidate id:4, icp:0.862439
+-14 57 30
+[Loop Info] rough size:18, match size:5, rough triangle dis:0.833803, fine triangle dis:0.00492982, rough binary similarity:0.833803, fine binary similarity:0.8497
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:58, cloud size:94067
+proj_plane_list.size(): 33
+merge_plane_list.size(): 32
+elapsed_ms aft generate std: 78.6732
+[interT] corners sizes: 49 67
+57 58 26
+[interT2] corners sizes: 49 65
+56 58 24
+[Corner] corner size:49  descriptor size:2588
+[Rough match] rough match frame:12 match size:22
+Fine sucess, Fine size:10  ,Icp score:0.807092, score:0.817092
+[Rough match] rough match frame:29 match size:21
+[Rough match] rough match frame:24 match size:18
+Fine sucess, Fine size:4  ,Icp score:0.664415, score:0.668415
+[Rough match] rough match frame:19 match size:17
+[Rough match] rough match frame:21 match size:16
+Fine sucess, Fine size:4  ,Icp score:0.660194, score:0.664194
+[Rough match] rough match frame:16 match size:14
+Fine sucess, Fine size:4  ,Icp score:0.633601, score:0.637601
+[Rough match] rough match frame:33 match size:13
+[Rough match] rough match frame:13 match size:11
+[Rough match] rough match frame:28 match size:10
+[Rough match] rough match frame:30 match size:10
+[Loop Sucess] 58--12, candidate id:0, icp:0.817092
+-13 58 36
+[Loop Info] rough size:22, match size:10, rough triangle dis:0.806467, fine triangle dis:0.00589002, rough binary similarity:0.806467, fine binary similarity:0.803021
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:59, cloud size:115648
+proj_plane_list.size(): 114
+merge_plane_list.size(): 79
+elapsed_ms aft generate std: 109.137
+[interT] corners sizes: 46 49
+58 59 14
+[interT2] corners sizes: 46 67
+57 59 26
+[Corner] corner size:46  descriptor size:2278
+[Rough match] rough match frame:30 match size:8
+[Rough match] rough match frame:11 match size:5
+[Rough match] rough match frame:12 match size:5
+[Rough match] rough match frame:3 match size:4
+[Rough match] rough match frame:7 match size:4
+[Loop Fail] 59, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:60, cloud size:55365
+proj_plane_list.size(): 33
+merge_plane_list.size(): 27
+elapsed_ms aft generate std: 45.5798
+[interT] corners sizes: 37 46
+59 60 8
+[interT2] corners sizes: 37 49
+58 60 6
+[Corner] corner size:37  descriptor size:1722
+[Rough match] rough match frame:3 match size:10
+[Rough match] rough match frame:11 match size:10
+[Rough match] rough match frame:21 match size:10
+[Rough match] rough match frame:28 match size:10
+[Rough match] rough match frame:27 match size:8
+[Rough match] rough match frame:12 match size:7
+[Rough match] rough match frame:16 match size:7
+Fine sucess, Fine size:4  ,Icp score:0.665905, score:0.669905
+[Rough match] rough match frame:0 match size:6
+[Rough match] rough match frame:13 match size:6
+[Rough match] rough match frame:24 match size:6
+[Loop Sucess] 60--16, candidate id:6, icp:0.669905
+-17 60 24
+[Loop Info] rough size:7, match size:4, rough triangle dis:0.742287, fine triangle dis:0.00746037, rough binary similarity:0.742287, fine binary similarity:0.743102
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:61, cloud size:47542
+proj_plane_list.size(): 28
+merge_plane_list.size(): 24
+elapsed_ms aft generate std: 33.9437
+[interT] corners sizes: 37 37
+60 61 10
+[interT2] corners sizes: 37 46
+59 61 4
+[Corner] corner size:37  descriptor size:1595
+[Rough match] rough match frame:7 match size:14
+[Rough match] rough match frame:0 match size:13
+[Rough match] rough match frame:21 match size:13
+[Rough match] rough match frame:12 match size:12
+[Rough match] rough match frame:28 match size:11
+[Rough match] rough match frame:11 match size:9
+[Rough match] rough match frame:27 match size:8
+[Rough match] rough match frame:3 match size:7
+[Rough match] rough match frame:5 match size:7
+[Rough match] rough match frame:13 match size:7
+[Loop Fail] 61, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:62, cloud size:51368
+proj_plane_list.size(): 47
+merge_plane_list.size(): 38
+elapsed_ms aft generate std: 41.273
+[interT] corners sizes: 48 37
+61 62 10
+[interT2] corners sizes: 48 37
+60 62 6
+[Corner] corner size:48  descriptor size:2268
+[Rough match] rough match frame:29 match size:10
+[Rough match] rough match frame:7 match size:8
+[Rough match] rough match frame:30 match size:8
+[Rough match] rough match frame:13 match size:7
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:27 match size:7
+[Rough match] rough match frame:10 match size:6
+[Rough match] rough match frame:12 match size:6
+[Rough match] rough match frame:22 match size:5
+[Rough match] rough match frame:23 match size:5
+[Loop Fail] 62, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:63, cloud size:75333
+proj_plane_list.size(): 32
+merge_plane_list.size(): 31
+elapsed_ms aft generate std: 62.2635
+[interT] corners sizes: 53 48
+62 63 10
+[interT2] corners sizes: 53 37
+61 63 6
+[Corner] corner size:53  descriptor size:2602
+[Rough match] rough match frame:28 match size:13
+[Rough match] rough match frame:29 match size:13
+[Rough match] rough match frame:20 match size:12
+[Rough match] rough match frame:13 match size:10
+[Rough match] rough match frame:12 match size:9
+[Rough match] rough match frame:30 match size:9
+[Rough match] rough match frame:33 match size:9
+[Rough match] rough match frame:19 match size:8
+[Rough match] rough match frame:27 match size:8
+[Rough match] rough match frame:3 match size:7
+[Loop Fail] 63, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:64, cloud size:94354
+proj_plane_list.size(): 42
+merge_plane_list.size(): 34
+elapsed_ms aft generate std: 40.1562
+[interT] corners sizes: 46 53
+63 64 12
+[interT2] corners sizes: 46 48
+62 64 10
+[Corner] corner size:46  descriptor size:2094
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 64, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:65, cloud size:80859
+proj_plane_list.size(): 40
+merge_plane_list.size(): 36
+elapsed_ms aft generate std: 50.7884
+[interT] corners sizes: 46 46
+64 65 12
+[interT2] corners sizes: 46 53
+63 65 12
+[Corner] corner size:46  descriptor size:2240
+[Rough match] rough match frame:28 match size:13
+[Rough match] rough match frame:3 match size:9
+[Rough match] rough match frame:13 match size:8
+[Rough match] rough match frame:0 match size:6
+[Rough match] rough match frame:16 match size:6
+[Rough match] rough match frame:33 match size:6
+[Rough match] rough match frame:6 match size:5
+[Rough match] rough match frame:29 match size:5
+[Rough match] rough match frame:11 match size:4
+[Rough match] rough match frame:20 match size:4
+[Loop Fail] 65, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:66, cloud size:59296
+proj_plane_list.size(): 36
+merge_plane_list.size(): 25
+elapsed_ms aft generate std: 36.7384
+[interT] corners sizes: 38 46
+65 66 10
+[interT2] corners sizes: 38 46
+64 66 2
+[Corner] corner size:38  descriptor size:1881
+[Rough match] rough match frame:21 match size:14
+[Rough match] rough match frame:12 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:13 match size:5
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:30 match size:4
+[Loop Fail] 66, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:67, cloud size:65581
+proj_plane_list.size(): 53
+merge_plane_list.size(): 35
+elapsed_ms aft generate std: 45.0117
+[interT] corners sizes: 37 38
+66 67 8
+[interT2] corners sizes: 37 46
+65 67 10
+[Corner] corner size:37  descriptor size:1829
+[Rough match] rough match frame:29 match size:23
+[Rough match] rough match frame:28 match size:12
+[Rough match] rough match frame:10 match size:11
+Fine sucess, Fine size:5  ,Icp score:0.508315, score:0.513315
+[Rough match] rough match frame:13 match size:8
+[Rough match] rough match frame:17 match size:7
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:31 match size:7
+[Rough match] rough match frame:6 match size:6
+[Rough match] rough match frame:3 match size:5
+[Rough match] rough match frame:12 match size:5
+[Loop Sucess] 67--10, candidate id:2, icp:0.513315
+-11 67 30
+[Loop Info] rough size:11, match size:5, rough triangle dis:0.755191, fine triangle dis:0.00684822, rough binary similarity:0.755191, fine binary similarity:0.845365
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:68, cloud size:62658
+proj_plane_list.size(): 72
+merge_plane_list.size(): 50
+elapsed_ms aft generate std: 56.1426
+[interT] corners sizes: 40 37
+67 68 22
+[interT2] corners sizes: 40 38
+66 68 10
+[Corner] corner size:40  descriptor size:1922
+[Rough match] rough match frame:27 match size:10
+[Rough match] rough match frame:30 match size:10
+[Rough match] rough match frame:28 match size:9
+[Rough match] rough match frame:12 match size:8
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:29 match size:7
+[Rough match] rough match frame:13 match size:6
+[Rough match] rough match frame:7 match size:5
+[Rough match] rough match frame:24 match size:5
+[Rough match] rough match frame:0 match size:4
+[Loop Fail] 68, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:69, cloud size:75948
+proj_plane_list.size(): 50
+merge_plane_list.size(): 34
+elapsed_ms aft generate std: 62.9517
+[interT] corners sizes: 56 40
+68 69 12
+[interT2] corners sizes: 56 37
+67 69 12
+[Corner] corner size:56  descriptor size:2874
+[Rough match] rough match frame:13 match size:18
+[Rough match] rough match frame:0 match size:13
+[Rough match] rough match frame:11 match size:13
+[Rough match] rough match frame:12 match size:13
+[Rough match] rough match frame:19 match size:13
+[Rough match] rough match frame:30 match size:12
+Fine sucess, Fine size:4  ,Icp score:0.744893, score:0.748893
+[Rough match] rough match frame:16 match size:11
+[Rough match] rough match frame:29 match size:10
+[Rough match] rough match frame:31 match size:9
+[Rough match] rough match frame:7 match size:8
+[Loop Sucess] 69--30, candidate id:5, icp:0.748893
+-31 69 24
+[Loop Info] rough size:12, match size:4, rough triangle dis:0.779319, fine triangle dis:0.00182236, rough binary similarity:0.779319, fine binary similarity:0.786409
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:70, cloud size:79886
+proj_plane_list.size(): 32
+merge_plane_list.size(): 27
+elapsed_ms aft generate std: 40.3691
+[interT] corners sizes: 47 56
+69 70 10
+[interT2] corners sizes: 47 40
+68 70 6
+[Corner] corner size:47  descriptor size:2411
+[Rough match] rough match frame:27 match size:27
+[Rough match] rough match frame:28 match size:25
+Fine sucess, Fine size:4  ,Icp score:0.729924, score:0.733924
+[Rough match] rough match frame:16 match size:24
+Fine sucess, Fine size:4  ,Icp score:0.694073, score:0.698073
+[Rough match] rough match frame:7 match size:22
+[Rough match] rough match frame:21 match size:22
+[Rough match] rough match frame:24 match size:19
+[Rough match] rough match frame:3 match size:18
+[Rough match] rough match frame:6 match size:17
+[Rough match] rough match frame:19 match size:17
+[Rough match] rough match frame:29 match size:17
+[Loop Sucess] 70--28, candidate id:1, icp:0.733924
+-29 70 24
+[Loop Info] rough size:25, match size:4, rough triangle dis:0.782948, fine triangle dis:0.00442342, rough binary similarity:0.782948, fine binary similarity:0.81903
+1 2 3 lidar_buf size: 2 waiting to process
+
+Key frame:71, cloud size:73089
+proj_plane_list.size(): 24
+merge_plane_list.size(): 21
+elapsed_ms aft generate std: 32.7563
+[interT] corners sizes: 38 47
+70 71 24
+[interT2] corners sizes: 38 56
+69 71 10
+[Corner] corner size:38  descriptor size:1853
+[Rough match] rough match frame:3 match size:23
+[Rough match] rough match frame:27 match size:21
+[Rough match] rough match frame:28 match size:20
+[Rough match] rough match frame:29 match size:20
+[Rough match] rough match frame:21 match size:18
+[Rough match] rough match frame:7 match size:15
+[Rough match] rough match frame:10 match size:15
+[Rough match] rough match frame:6 match size:14
+[Rough match] rough match frame:16 match size:12
+[Rough match] rough match frame:0 match size:10
+[Loop Fail] 71, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:72, cloud size:80339
+proj_plane_list.size(): 29
+merge_plane_list.size(): 29
+elapsed_ms aft generate std: 38.1902
+[interT] corners sizes: 33 38
+71 72 12
+[interT2] corners sizes: 33 47
+70 72 10
+[Corner] corner size:33  descriptor size:1464
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:27 match size:6
+[Rough match] rough match frame:11 match size:4
+[Loop Fail] 72, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:73, cloud size:65054
+proj_plane_list.size(): 23
+merge_plane_list.size(): 20
+elapsed_ms aft generate std: 41.375
+[interT] corners sizes: 37 33
+72 73 8
+[interT2] corners sizes: 37 38
+71 73 6
+[Corner] corner size:37  descriptor size:1894
+[Rough match] rough match frame:6 match size:8
+[Rough match] rough match frame:13 match size:8
+[Rough match] rough match frame:28 match size:8
+[Rough match] rough match frame:27 match size:7
+[Rough match] rough match frame:3 match size:6
+[Rough match] rough match frame:12 match size:6
+[Rough match] rough match frame:7 match size:5
+[Rough match] rough match frame:19 match size:5
+[Rough match] rough match frame:21 match size:5
+[Rough match] rough match frame:24 match size:5
+[Loop Fail] 73, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:74, cloud size:54937
+proj_plane_list.size(): 19
+merge_plane_list.size(): 19
+elapsed_ms aft generate std: 35.0863
+[interT] corners sizes: 44 37
+73 74 10
+[interT2] corners sizes: 44 33
+72 74 2
+[Corner] corner size:44  descriptor size:2034
+[Rough match] rough match frame:28 match size:14
+[Rough match] rough match frame:21 match size:9
+[Rough match] rough match frame:10 match size:6
+[Rough match] rough match frame:27 match size:6
+[Rough match] rough match frame:3 match size:5
+[Rough match] rough match frame:6 match size:5
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:29 match size:4
+[Loop Fail] 74, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:75, cloud size:62241
+proj_plane_list.size(): 19
+merge_plane_list.size(): 16
+elapsed_ms aft generate std: 30.7293
+[interT] corners sizes: 33 44
+74 75 18
+[interT2] corners sizes: 33 37
+73 75 4
+[Corner] corner size:33  descriptor size:1463
+[Rough match] rough match frame:15 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:10 match size:5
+[Rough match] rough match frame:28 match size:5
+[Rough match] rough match frame:21 match size:4
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 75, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:76, cloud size:111894
+proj_plane_list.size(): 25
+merge_plane_list.size(): 23
+elapsed_ms aft generate std: 39.6141
+[interT] corners sizes: 36 33
+75 76 6
+[interT2] corners sizes: 36 44
+74 76 8
+[Corner] corner size:36  descriptor size:1530
+[Rough match] rough match frame:30 match size:8
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:11 match size:5
+[Rough match] rough match frame:28 match size:5
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:20 match size:4
+[Loop Fail] 76, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:77, cloud size:66750
+proj_plane_list.size(): 24
+merge_plane_list.size(): 21
+elapsed_ms aft generate std: 37.8078
+[interT] corners sizes: 33 36
+76 77 6
+[interT2] corners sizes: 33 33
+75 77 8
+[Corner] corner size:33  descriptor size:1372
+[Rough match] rough match frame:19 match size:7
+[Rough match] rough match frame:3 match size:6
+[Rough match] rough match frame:13 match size:6
+[Rough match] rough match frame:28 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:7 match size:5
+[Rough match] rough match frame:12 match size:5
+[Rough match] rough match frame:29 match size:5
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:11 match size:4
+[Loop Fail] 77, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:78, cloud size:59461
+proj_plane_list.size(): 22
+merge_plane_list.size(): 18
+elapsed_ms aft generate std: 34.8323
+[interT] corners sizes: 37 33
+77 78 4
+[interT2] corners sizes: 37 36
+76 78 6
+[Corner] corner size:37  descriptor size:1514
+[Rough match] rough match frame:21 match size:4
+[Rough match] rough match frame:22 match size:4
+[Loop Fail] 78, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:79, cloud size:65135
+proj_plane_list.size(): 25
+merge_plane_list.size(): 23
+elapsed_ms aft generate std: 39.6916
+[interT] corners sizes: 46 37
+78 79 10
+[interT2] corners sizes: 46 33
+77 79 4
+[Corner] corner size:46  descriptor size:1981
+[Rough match] rough match frame:27 match size:12
+[Rough match] rough match frame:21 match size:11
+[Rough match] rough match frame:3 match size:8
+[Rough match] rough match frame:13 match size:6
+[Rough match] rough match frame:22 match size:5
+[Rough match] rough match frame:28 match size:5
+[Rough match] rough match frame:12 match size:4
+[Rough match] rough match frame:29 match size:4
+[Rough match] rough match frame:30 match size:4
+[Loop Fail] 79, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:80, cloud size:73054
+proj_plane_list.size(): 101
+merge_plane_list.size(): 76
+elapsed_ms aft generate std: 49.5999
+[interT] corners sizes: 62 46
+79 80 6
+[interT2] corners sizes: 62 37
+78 80 2
+[Corner] corner size:62  descriptor size:2895
+[Rough match] rough match frame:21 match size:9
+[Rough match] rough match frame:27 match size:9
+[Rough match] rough match frame:30 match size:5
+[Rough match] rough match frame:6 match size:4
+[Rough match] rough match frame:26 match size:4
+[Rough match] rough match frame:28 match size:4
+[Loop Fail] 80, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:81, cloud size:63192
+proj_plane_list.size(): 82
+merge_plane_list.size(): 56
+elapsed_ms aft generate std: 66.7299
+[interT] corners sizes: 59 62
+80 81 10
+[interT2] corners sizes: 59 46
+79 81 6
+[Corner] corner size:59  descriptor size:3087
+[Loop Fail] 81, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:82, cloud size:81358
+proj_plane_list.size(): 38
+merge_plane_list.size(): 29
+elapsed_ms aft generate std: 67.5066
+[interT] corners sizes: 72 59
+81 82 10
+[interT2] corners sizes: 72 62
+80 82 14
+[Corner] corner size:72  descriptor size:3580
+[Rough match] rough match frame:7 match size:28
+Fine sucess, Fine size:12  ,Icp score:0.78481, score:0.79681
+[Rough match] rough match frame:20 match size:19
+[Rough match] rough match frame:12 match size:16
+[Rough match] rough match frame:3 match size:14
+[Rough match] rough match frame:19 match size:13
+[Rough match] rough match frame:24 match size:12
+[Rough match] rough match frame:11 match size:11
+[Rough match] rough match frame:21 match size:11
+[Rough match] rough match frame:28 match size:11
+Fine sucess, Fine size:4  ,Icp score:0.610516, score:0.614516
+[Rough match] rough match frame:29 match size:11
+[Loop Sucess] 82--7, candidate id:0, icp:0.79681
+-8 82 36
+[Loop Info] rough size:28, match size:12, rough triangle dis:0.781915, fine triangle dis:0.00407261, rough binary similarity:0.781915, fine binary similarity:0.774328
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:83, cloud size:88752
+proj_plane_list.size(): 41
+merge_plane_list.size(): 29
+elapsed_ms aft generate std: 63.7253
+[interT] corners sizes: 59 72
+82 83 12
+[interT2] corners sizes: 59 59
+81 83 6
+[Corner] corner size:59  descriptor size:3066
+[Rough match] rough match frame:30 match size:5
+[Rough match] rough match frame:21 match size:4
+[Loop Fail] 83, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:84, cloud size:44788
+proj_plane_list.size(): 21
+merge_plane_list.size(): 16
+elapsed_ms aft generate std: 31.7329
+[interT] corners sizes: 30 59
+83 84 8
+[interT2] corners sizes: 30 72
+82 84 4
+[Corner] corner size:30  descriptor size:1342
+[Loop Fail] 84, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:85, cloud size:65129
+proj_plane_list.size(): 71
+merge_plane_list.size(): 55
+elapsed_ms aft generate std: 57.2978
+[interT] corners sizes: 49 30
+84 85 2
+[interT2] corners sizes: 49 59
+83 85 6
+[Corner] corner size:49  descriptor size:2413
+[Loop Fail] 85, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:86, cloud size:114389
+proj_plane_list.size(): 37
+merge_plane_list.size(): 28
+elapsed_ms aft generate std: 92.6454
+[interT] corners sizes: 43 49
+85 86 2
+[interT2] corners sizes: 43 30
+84 86 2
+[Corner] corner size:43  descriptor size:1895
+[Rough match] rough match frame:16 match size:14
+Fine sucess, Fine size:5  ,Icp score:0.851717, score:0.856717
+[Rough match] rough match frame:29 match size:12
+[Rough match] rough match frame:18 match size:6
+[Rough match] rough match frame:11 match size:4
+[Rough match] rough match frame:13 match size:4
+[Rough match] rough match frame:17 match size:4
+[Loop Sucess] 86--16, candidate id:0, icp:0.856717
+-17 86 30
+[Loop Info] rough size:14, match size:5, rough triangle dis:0.789136, fine triangle dis:0.0070435, rough binary similarity:0.789136, fine binary similarity:0.826196
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:87, cloud size:147902
+proj_plane_list.size(): 49
+merge_plane_list.size(): 41
+elapsed_ms aft generate std: 137.886
+[interT] corners sizes: 62 43
+86 87 4
+[interT2] corners sizes: 62 49
+85 87 2
+[Corner] corner size:62  descriptor size:3066
+[Rough match] rough match frame:28 match size:8
+[Rough match] rough match frame:21 match size:6
+[Rough match] rough match frame:30 match size:5
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:3 match size:4
+[Rough match] rough match frame:11 match size:4
+[Loop Fail] 87, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:88, cloud size:104490
+proj_plane_list.size(): 32
+merge_plane_list.size(): 30
+elapsed_ms aft generate std: 32.2567
+[interT] corners sizes: 45 62
+87 88 14
+[interT2] corners sizes: 45 43
+86 88 2
+[Corner] corner size:45  descriptor size:2208
+[Rough match] rough match frame:21 match size:14
+[Rough match] rough match frame:28 match size:7
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:19 match size:4
+[Rough match] rough match frame:26 match size:4
+[Loop Fail] 88, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:89, cloud size:79140
+proj_plane_list.size(): 72
+merge_plane_list.size(): 56
+elapsed_ms aft generate std: 52.5723
+[interT] corners sizes: 44 45
+88 89 22
+[interT2] corners sizes: 44 62
+87 89 10
+[Corner] corner size:44  descriptor size:2231
+[Rough match] rough match frame:21 match size:4
+[Loop Fail] 89, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:90, cloud size:100620
+proj_plane_list.size(): 66
+merge_plane_list.size(): 53
+elapsed_ms aft generate std: 96.917
+[interT] corners sizes: 35 44
+89 90 6
+[interT2] corners sizes: 35 45
+88 90 18
+[Corner] corner size:35  descriptor size:1795
+[Rough match] rough match frame:10 match size:7
+[Rough match] rough match frame:30 match size:7
+[Rough match] rough match frame:27 match size:6
+[Rough match] rough match frame:28 match size:6
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:3 match size:4
+[Rough match] rough match frame:12 match size:4
+[Loop Fail] 90, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:91, cloud size:98513
+proj_plane_list.size(): 33
+merge_plane_list.size(): 31
+elapsed_ms aft generate std: 51.3426
+[interT] corners sizes: 42 35
+90 91 12
+[interT2] corners sizes: 42 44
+89 91 2
+[Corner] corner size:42  descriptor size:1997
+[Rough match] rough match frame:30 match size:9
+[Rough match] rough match frame:29 match size:8
+[Rough match] rough match frame:28 match size:7
+[Rough match] rough match frame:13 match size:6
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:16 match size:5
+[Rough match] rough match frame:17 match size:5
+[Rough match] rough match frame:21 match size:5
+[Rough match] rough match frame:14 match size:4
+[Rough match] rough match frame:27 match size:4
+[Loop Fail] 91, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:92, cloud size:90153
+proj_plane_list.size(): 33
+merge_plane_list.size(): 28
+elapsed_ms aft generate std: 32.5216
+[interT] corners sizes: 26 42
+91 92 10
+[interT2] corners sizes: 26 35
+90 92 2
+[Corner] corner size:26  descriptor size:1015
+[Rough match] rough match frame:31 match size:6
+[Rough match] rough match frame:6 match size:5
+[Rough match] rough match frame:24 match size:5
+[Rough match] rough match frame:29 match size:5
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:7 match size:4
+[Rough match] rough match frame:10 match size:4
+[Rough match] rough match frame:13 match size:4
+[Rough match] rough match frame:30 match size:4
+[Loop Fail] 92, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:93, cloud size:81392
+proj_plane_list.size(): 25
+merge_plane_list.size(): 24
+elapsed_ms aft generate std: 27.2377
+[interT] corners sizes: 19 26
+92 93 6
+[interT2] corners sizes: 19 42
+91 93 6
+[Corner] corner size:19  descriptor size:719
+[Rough match] rough match frame:3 match size:7
+[Rough match] rough match frame:10 match size:6
+[Rough match] rough match frame:27 match size:5
+[Rough match] rough match frame:28 match size:5
+[Rough match] rough match frame:0 match size:4
+[Rough match] rough match frame:7 match size:4
+[Rough match] rough match frame:24 match size:4
+[Loop Fail] 93, icp:0
+lidar_buf size: 2 waiting to process
+
+Key frame:94, cloud size:87724
+proj_plane_list.size(): 21
+merge_plane_list.size(): 19
+elapsed_ms aft generate std: 31.645
+[interT] corners sizes: 26 19
+93 94 10
+[interT2] corners sizes: 26 26
+92 94 6
+[Corner] corner size:26  descriptor size:1161
+[Rough match] rough match frame:30 match size:15
+[Rough match] rough match frame:11 match size:13
+[Rough match] rough match frame:3 match size:11
+[Rough match] rough match frame:7 match size:11
+[Rough match] rough match frame:6 match size:10
+[Rough match] rough match frame:29 match size:10
+[Rough match] rough match frame:0 match size:8
+[Rough match] rough match frame:12 match size:7
+[Rough match] rough match frame:24 match size:7
+[Rough match] rough match frame:28 match size:7
+[Loop Fail] 94, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:95, cloud size:97480
+proj_plane_list.size(): 29
+merge_plane_list.size(): 27
+elapsed_ms aft generate std: 46.1193
+[interT] corners sizes: 30 26
+94 95 4
+[interT2] corners sizes: 30 19
+93 95 4
+[Corner] corner size:30  descriptor size:1272
+[Rough match] rough match frame:20 match size:10
+[Rough match] rough match frame:3 match size:9
+[Rough match] rough match frame:17 match size:8
+[Rough match] rough match frame:21 match size:8
+[Rough match] rough match frame:0 match size:7
+[Rough match] rough match frame:12 match size:7
+[Rough match] rough match frame:30 match size:7
+[Rough match] rough match frame:11 match size:6
+[Rough match] rough match frame:19 match size:6
+[Rough match] rough match frame:26 match size:6
+[Loop Fail] 95, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:96, cloud size:93601
+proj_plane_list.size(): 29
+merge_plane_list.size(): 26
+elapsed_ms aft generate std: 35.0969
+[interT] corners sizes: 31 30
+95 96 4
+[interT2] corners sizes: 31 26
+94 96 6
+[Corner] corner size:31  descriptor size:1447
+[Rough match] rough match frame:27 match size:21
+[Rough match] rough match frame:30 match size:16
+[Rough match] rough match frame:3 match size:12
+[Rough match] rough match frame:13 match size:12
+[Rough match] rough match frame:28 match size:12
+[Rough match] rough match frame:12 match size:10
+[Rough match] rough match frame:24 match size:10
+[Rough match] rough match frame:0 match size:8
+[Rough match] rough match frame:21 match size:8
+[Rough match] rough match frame:29 match size:8
+[Loop Fail] 96, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:97, cloud size:78225
+proj_plane_list.size(): 24
+merge_plane_list.size(): 20
+elapsed_ms aft generate std: 38.9966
+[interT] corners sizes: 34 31
+96 97 10
+[interT2] corners sizes: 34 30
+95 97 12
+[Corner] corner size:34  descriptor size:1392
+[Rough match] rough match frame:0 match size:5
+[Rough match] rough match frame:21 match size:5
+[Rough match] rough match frame:13 match size:4
+[Rough match] rough match frame:27 match size:4
+[Rough match] rough match frame:28 match size:4
+[Loop Fail] 97, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:98, cloud size:87420
+proj_plane_list.size(): 30
+merge_plane_list.size(): 24
+elapsed_ms aft generate std: 34.7616
+[interT] corners sizes: 33 34
+97 98 2
+[interT2] corners sizes: 33 31
+96 98 14
+[Corner] corner size:33  descriptor size:1753
+[Rough match] rough match frame:29 match size:24
+[Rough match] rough match frame:27 match size:17
+[Rough match] rough match frame:21 match size:15
+[Rough match] rough match frame:20 match size:14
+[Rough match] rough match frame:12 match size:12
+[Rough match] rough match frame:13 match size:11
+[Rough match] rough match frame:17 match size:11
+Fine sucess, Fine size:4  ,Icp score:0.701965, score:0.705965
+[Rough match] rough match frame:16 match size:10
+[Rough match] rough match frame:7 match size:9
+[Rough match] rough match frame:30 match size:9
+[Loop Sucess] 98--17, candidate id:6, icp:0.705965
+-18 98 24
+[Loop Info] rough size:11, match size:4, rough triangle dis:0.756354, fine triangle dis:0.00316501, rough binary similarity:0.756354, fine binary similarity:0.729003
+1 2 3 lidar_buf size: 1 waiting to process
+
+Key frame:99, cloud size:92404
+proj_plane_list.size(): 45
+merge_plane_list.size(): 43
+elapsed_ms aft generate std: 41.6906
+[interT] corners sizes: 42 33
+98 99 12
+[interT2] corners sizes: 42 34
+97 99 4
+[Corner] corner size:42  descriptor size:1999
+[Rough match] rough match frame:17 match size:12
+[Rough match] rough match frame:27 match size:11
+[Rough match] rough match frame:21 match size:7
+[Rough match] rough match frame:7 match size:6
+[Rough match] rough match frame:13 match size:6
+[Rough match] rough match frame:19 match size:6
+[Rough match] rough match frame:29 match size:6
+[Rough match] rough match frame:12 match size:5
+[Rough match] rough match frame:30 match size:5
+[Rough match] rough match frame:0 match size:4
+[Loop Fail] 99, icp:0
+lidar_buf size: 1 waiting to process
+
+Key frame:100, cloud size:83522
+proj_plane_list.size(): 38
+merge_plane_list.size(): 33
+elapsed_ms aft generate std: 42.4284
+[interT] corners sizes: 43 42
+99 100 22
+[interT2] corners sizes: 43 33
+98 100 6
+[Corner] corner size:43  descriptor size:2041
+[Rough match] rough match frame:28 match size:25
+[Rough match] rough match frame:13 match size:19
+[Rough match] rough match frame:19 match size:16
+[Rough match] rough match frame:16 match size:15
+[Rough match] rough match frame:30 match size:15
+[Rough match] rough match frame:0 match size:14
+Fine sucess, Fine size:4  ,Icp score:0.298528, score:0.302528
+[Rough match] rough match frame:24 match size:14
+[Rough match] rough match frame:20 match size:12
+[Rough match] rough match frame:27 match size:11
+[Rough match] rough match frame:7 match size:10
+[Loop Fail] 100, icp:0.302528
+lidar_buf size: 1 waiting to process
+
+Key frame:101, cloud size:460498
+proj_plane_list.size(): 54
+merge_plane_list.size(): 45
+elapsed_ms aft generate std: 147.314
+[interT] corners sizes: 39 43
+100 101 18
+[interT2] corners sizes: 39 42
+99 101 10
+[Corner] corner size:39  descriptor size:1904
+[Rough match] rough match frame:27 match size:20
+Fine sucess, Fine size:5  ,Icp score:0.824137, score:0.829137
+[Rough match] rough match frame:28 match size:16
+[Rough match] rough match frame:13 match size:13
+[Rough match] rough match frame:17 match size:13
+[Rough match] rough match frame:20 match size:13
+[Rough match] rough match frame:30 match size:13
+[Rough match] rough match frame:7 match size:11
+[Rough match] rough match frame:22 match size:11
+[Rough match] rough match frame:3 match size:10
+[Rough match] rough match frame:29 match size:9
+[Loop Sucess] 101--27, candidate id:0, icp:0.829137
+-28 101 30
+[Loop Info] rough size:20, match size:5, rough triangle dis:0.765246, fine triangle dis:0.0049023, rough binary similarity:0.765246, fine binary similarity:0.752677
+1 2 3 

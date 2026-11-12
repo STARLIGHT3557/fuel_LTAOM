@@ -1,0 +1,833 @@
+[LoadPrior]: Loading pcd from /home/axg/fuel_sim_logs/ltaom/map_prior/clouds_corrected.pcd
+[LoadPrior]: Extracted KF 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34
+[LoadPrior]: Loading prior cloud and poses done 
+[Add Subamp Info]: akeyframe.KeyCloud: 117603
+[Add Subamp Info]: akeyframe.KeyTime: 82036000000
+[Add Subamp Info]: akeyframe.KeyPose: -0.033369 -0.0101122 2.43875
+[Add Subamp Info]: passed_dis: 0, keyframes size(): 1
+[Add Adjacent KPF]: adjacent KP factor absent! False Positive Rejection might not work due to this.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 90567
+[Add Subamp Info]: akeyframe.KeyTime: 87036000000
+[Add Subamp Info]: akeyframe.KeyPose: -0.434279 0.252121 3.94458
+[Add Subamp Info]: passed_dis: 1.5802, keyframes size(): 2
+[Add Odom Factor]: 0 1 
+Detected LC: -18 0
+targetKeyframeCloud size 56588
+currKeyframeCloud size 117603
+[FPR]: submap pair's pt numbers ratio: 0.528711
+[FPR]: overlap ratio is 0.150494
+[FPR]: need to wait for one more loop closure.
+[Add Adj KPF]: 0 1 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 138354
+[Add Subamp Info]: akeyframe.KeyTime: 92436000000
+[Add Subamp Info]: akeyframe.KeyPose: -0.012179 -0.0621713 2.61758
+[Add Subamp Info]: passed_dis: 3.00774, keyframes size(): 3
+[Add Odom Factor]: 1 2 
+[Add Adj KPF]: 1 2 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 522032
+[Add Subamp Info]: akeyframe.KeyTime: 106836000000
+[Add Subamp Info]: akeyframe.KeyPose: 0.0419251 0.159231 0.926465
+[Add Subamp Info]: passed_dis: 4.71414, keyframes size(): 4
+[Add Odom Factor]: 2 3 
+Detected LC: -34 3
+targetKeyframeCloud size 171295
+currKeyframeCloud size 522032
+[FPR]: submap pair's pt numbers ratio: 0.61141
+[FPR]: overlap ratio is 0.24455
+LC KPF queue size is 2 now.
+LC KPF queue front: -18 0LC KPF queue front: -34 3[Add Prior Factor]: prior at 3
+[Add Prior Factor]: prior at 0
+LC KPF queue size is 0 now.
+[Add Adj KPF]: 2 3 6 6 7
+[Optimize]: running isam2 optimization ...
+save pose txt takes 0.096095
+[Optimize]: optimization 1 takes 1.1325ms
+[Optimize]: optimization with lc: ------------34 3
+[Optimize]: optimization avg takes 1.1325ms
+[Optimize]: optimization max takes 1.1325ms
+(0 1=8.59493)!!!!(1 2=8.19942)!!!!(2 3=7.51478)!!!![FPR]: reject, large residual appear.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 1877608
+[Add Subamp Info]: akeyframe.KeyTime: 151736000000
+[Add Subamp Info]: akeyframe.KeyPose: 0.0153313 0.028966 1.51329
+[Add Subamp Info]: passed_dis: 5.31583, keyframes size(): 5
+[Add Odom Factor]: 3 4 
+Detected LC: -8 4
+targetKeyframeCloud size 47313
+currKeyframeCloud size 1877608
+[FPR]: submap pair's pt numbers ratio: 0.31377
+[FPR]: reject, the target cloud is like a plane.
+[FPR]: reject, too small overlap.
+[Add Adj KPF]: 3 4 6 6 10
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 874112
+[Add Subamp Info]: akeyframe.KeyTime: 237436000000
+[Add Subamp Info]: akeyframe.KeyPose: -1.36501 -0.963235 1.52573
+[Add Subamp Info]: passed_dis: 7.01583, keyframes size(): 6
+[Add Odom Factor]: 4 5 
+Detected LC: -34 5
+targetKeyframeCloud size 171295
+currKeyframeCloud size 874112
+[FPR]: submap pair's pt numbers ratio: 0.46164
+[FPR]: reject, the target cloud is like a plane.
+[FPR]: reject, too small overlap.
+[Add Adj KPF]: 4 5 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 62688
+[Add Subamp Info]: akeyframe.KeyTime: 239036000000
+[Add Subamp Info]: akeyframe.KeyPose: -3.459 -1.16549 1.40185
+[Add Subamp Info]: passed_dis: 9.1232, keyframes size(): 7
+[Add Odom Factor]: 5 6 
+[Add Adj KPF]: 5 6 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 32685
+[Add Subamp Info]: akeyframe.KeyTime: 240036000000
+[Add Subamp Info]: akeyframe.KeyPose: -4.76418 -0.0634853 1.38854
+[Add Subamp Info]: passed_dis: 10.8314, keyframes size(): 8
+[Add Odom Factor]: 6 7 
+Detected LC: -34 6
+targetKeyframeCloud size 171295
+currKeyframeCloud size 62688
+[FPR]: submap pair's pt numbers ratio: 0.865945
+[FPR]: overlap ratio is 0.505444
+[FPR]: need to wait for one more loop closure.
+[Add Adj KPF]: 6 7 6 6 8
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 48776
+[Add Subamp Info]: akeyframe.KeyTime: 241636000000
+[Add Subamp Info]: akeyframe.KeyPose: -6.18068 2.28013 1.21926
+[Add Subamp Info]: passed_dis: 13.5751, keyframes size(): 9
+[Add Odom Factor]: 7 8 
+[Add Adj KPF]: 7 8 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 87860
+[Add Subamp Info]: akeyframe.KeyTime: 243736000000
+[Add Subamp Info]: akeyframe.KeyPose: -8.34926 2.92817 1.05674
+[Add Subamp Info]: passed_dis: 15.8443, keyframes size(): 10
+[Add Odom Factor]: 8 9 
+[Add Adj KPF]: 8 9 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 79614
+[Add Subamp Info]: akeyframe.KeyTime: 245736000000
+[Add Subamp Info]: akeyframe.KeyPose: -10.0976 0.291485 1.10404
+[Add Subamp Info]: passed_dis: 19.0083, keyframes size(): 11
+[Add Odom Factor]: 9 10 
+[Add Adj KPF]: 9 10 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 73939
+[Add Subamp Info]: akeyframe.KeyTime: 247740000000
+[Add Subamp Info]: akeyframe.KeyPose: -10.8908 -2.70416 1.06924
+[Add Subamp Info]: passed_dis: 22.1074, keyframes size(): 12
+[Add Odom Factor]: 10 11 
+[Add Adj KPF]: 10 11 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 71067
+[Add Subamp Info]: akeyframe.KeyTime: 249736000000
+[Add Subamp Info]: akeyframe.KeyPose: -10.3605 -5.67012 1.19934
+[Add Subamp Info]: passed_dis: 25.1232, keyframes size(): 13
+[Add Odom Factor]: 11 12 
+[Add Adj KPF]: 11 12 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 80738
+[Add Subamp Info]: akeyframe.KeyTime: 251736000000
+[Add Subamp Info]: akeyframe.KeyPose: -11.0672 -8.1114 1.05088
+[Add Subamp Info]: passed_dis: 27.669, keyframes size(): 14
+[Add Odom Factor]: 12 13 
+[Add Adj KPF]: 12 13 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 89163
+[Add Subamp Info]: akeyframe.KeyTime: 253836000000
+[Add Subamp Info]: akeyframe.KeyPose: -13.4966 -8.06088 1.09798
+[Add Subamp Info]: passed_dis: 30.0994, keyframes size(): 15
+[Add Odom Factor]: 13 14 
+Detected LC: -8 13
+targetKeyframeCloud size 47313
+currKeyframeCloud size 80738
+[FPR]: submap pair's pt numbers ratio: 0.712579
+[FPR]: overlap ratio is 0.347535
+LC KPF queue size is 2 now.
+LC KPF queue front: -34 6LC KPF queue front: -8 13[Add Prior Factor]: prior at 13
+[Add Prior Factor]: prior at 6
+LC KPF queue size is 0 now.
+[Add Adj KPF]: 13 14 5 5 5
+[Optimize]: running isam2 optimization ...
+save pose txt takes 0.129147
+[Optimize]: optimization 1 takes 0.920544ms
+[Optimize]: optimization with lc: ------------8 13
+[Optimize]: optimization avg takes 1.02652ms
+[Optimize]: optimization max takes 1.1325ms
+(0 1=0.573262)(1 2=0.675601)(2 3=0.613468)(3 4=0.103546)(4 5=0.547755)(5 6=0.535506)(6 7=4.76044)!!!!(7 8=3.24009)!!!!(8 9=4.56462)!!!!(9 10=5.77934)!!!!(10 11=3.1714)!!!!(11 12=3.35867)!!!!(12 13=4.40448)!!!!(13 14=0.579523)[FPR]: reject, large residual appear.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 54721
+[Add Subamp Info]: akeyframe.KeyTime: 255336000000
+[Add Subamp Info]: akeyframe.KeyPose: -15.3207 -5.85416 1.16704
+[Add Subamp Info]: passed_dis: 32.9633, keyframes size(): 16
+[Add Odom Factor]: 14 15 
+Detected LC: -4 14
+targetKeyframeCloud size 45646
+currKeyframeCloud size 89163
+[FPR]: submap pair's pt numbers ratio: 0.491712
+[FPR]: overlap ratio is 0.0799144
+[FPR]: reject, too small overlap.
+[Add Adj KPF]: 14 15 1 1 1
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 79584
+[Add Subamp Info]: akeyframe.KeyTime: 257336000000
+[Add Subamp Info]: akeyframe.KeyPose: -16.2472 -2.94275 1.23132
+[Add Subamp Info]: passed_dis: 36.0192, keyframes size(): 17
+[Add Odom Factor]: 15 16 
+[Add Adj KPF]: 15 16 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 86112
+[Add Subamp Info]: akeyframe.KeyTime: 259336000000
+[Add Subamp Info]: akeyframe.KeyPose: -16.0065 -0.794477 0.929964
+[Add Subamp Info]: passed_dis: 38.2018, keyframes size(): 18
+[Add Odom Factor]: 16 17 
+[Add Adj KPF]: 16 17 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 69776
+[Add Subamp Info]: akeyframe.KeyTime: 261140000000
+[Add Subamp Info]: akeyframe.KeyPose: -15.3718 1.69774 0.591193
+[Add Subamp Info]: passed_dis: 40.7958, keyframes size(): 19
+[Add Odom Factor]: 17 18 
+[Add Adjacent KPF]: adjacent KP factor absent! False Positive Rejection might not work due to this.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 104594
+[Add Subamp Info]: akeyframe.KeyTime: 263540000000
+[Add Subamp Info]: akeyframe.KeyPose: -15.99 2.741 0.606832
+[Add Subamp Info]: passed_dis: 42.0086, keyframes size(): 20
+[Add Odom Factor]: 18 19 
+[Add Adj KPF]: 18 19 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 72094
+[Add Subamp Info]: akeyframe.KeyTime: 265136000000
+[Add Subamp Info]: akeyframe.KeyPose: -18.351 0.928804 1.128
+[Add Subamp Info]: passed_dis: 45.0302, keyframes size(): 21
+[Add Odom Factor]: 19 20 
+[Add Adj KPF]: 19 20 6 6 9
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 51637
+[Add Subamp Info]: akeyframe.KeyTime: 266136000000
+[Add Subamp Info]: akeyframe.KeyPose: -19.9735 -1.24079 1.28035
+[Add Subamp Info]: passed_dis: 47.7436, keyframes size(): 22
+[Add Odom Factor]: 20 21 
+Detected LC: -17 20
+targetKeyframeCloud size 67107
+currKeyframeCloud size 72094
+[FPR]: submap pair's pt numbers ratio: 0.467048
+[FPR]: overlap ratio is 0.0587275
+[FPR]: reject, too small overlap.
+[Add Adj KPF]: 20 21 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 57645
+[Add Subamp Info]: akeyframe.KeyTime: 267236000000
+[Add Subamp Info]: akeyframe.KeyPose: -21.1234 -2.22022 1.38424
+[Add Subamp Info]: passed_dis: 49.2577, keyframes size(): 23
+[Add Odom Factor]: 21 22 
+[Add Adj KPF]: 21 22 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 145735
+[Add Subamp Info]: akeyframe.KeyTime: 270140000000
+[Add Subamp Info]: akeyframe.KeyPose: -22.1651 -4.21233 1.29416
+[Add Subamp Info]: passed_dis: 51.5075, keyframes size(): 24
+[Add Odom Factor]: 22 23 
+[Add Adj KPF]: 22 23 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 98056
+[Add Subamp Info]: akeyframe.KeyTime: 272236000000
+[Add Subamp Info]: akeyframe.KeyPose: -22.6475 -7.0892 1.66124
+[Add Subamp Info]: passed_dis: 54.4476, keyframes size(): 25
+[Add Odom Factor]: 23 24 
+[Add Adj KPF]: 23 24 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 83260
+[Add Subamp Info]: akeyframe.KeyTime: 274036000000
+[Add Subamp Info]: akeyframe.KeyPose: -22.2025 -9.84511 2.07141
+[Add Subamp Info]: passed_dis: 57.2691, keyframes size(): 26
+[Add Odom Factor]: 24 25 
+[Add Adj KPF]: 24 25 6 6 15
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 66623
+[Add Subamp Info]: akeyframe.KeyTime: 275436000000
+[Add Subamp Info]: akeyframe.KeyPose: -20.5824 -12.1295 2.39489
+[Add Subamp Info]: passed_dis: 60.0883, keyframes size(): 27
+[Add Odom Factor]: 25 26 
+[Add Adj KPF]: 25 26 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 78385
+[Add Subamp Info]: akeyframe.KeyTime: 277140000000
+[Add Subamp Info]: akeyframe.KeyPose: -18.4264 -14.52 2.63728
+[Add Subamp Info]: passed_dis: 63.3166, keyframes size(): 28
+[Add Odom Factor]: 26 27 
+[Add Adj KPF]: 26 27 6 6 8
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 74904
+[Add Subamp Info]: akeyframe.KeyTime: 278836000000
+[Add Subamp Info]: akeyframe.KeyPose: -16.5306 -17.0311 2.5581
+[Add Subamp Info]: passed_dis: 66.464, keyframes size(): 29
+[Add Odom Factor]: 27 28 
+[Add Adj KPF]: 27 28 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 56582
+[Add Subamp Info]: akeyframe.KeyTime: 280336000000
+[Add Subamp Info]: akeyframe.KeyPose: -14.4658 -19.0962 2.54335
+[Add Subamp Info]: passed_dis: 69.3842, keyframes size(): 30
+[Add Odom Factor]: 28 29 
+[Add Adj KPF]: 28 29 1 1 1
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 89148
+[Add Subamp Info]: akeyframe.KeyTime: 282536000000
+[Add Subamp Info]: akeyframe.KeyPose: -13.1728 -19.7047 3.11825
+[Add Subamp Info]: passed_dis: 70.9246, keyframes size(): 31
+[Add Odom Factor]: 29 30 
+[Add Adjacent KPF]: adjacent KP factor absent! False Positive Rejection might not work due to this.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 67382
+[Add Subamp Info]: akeyframe.KeyTime: 284040000000
+[Add Subamp Info]: akeyframe.KeyPose: -13.7597 -18.0282 2.98685
+[Add Subamp Info]: passed_dis: 72.7057, keyframes size(): 32
+[Add Odom Factor]: 30 31 
+[Add Adj KPF]: 30 31 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 59381
+[Add Subamp Info]: akeyframe.KeyTime: 285336000000
+[Add Subamp Info]: akeyframe.KeyPose: -14.8633 -16.5281 2.83123
+[Add Subamp Info]: passed_dis: 74.5745, keyframes size(): 33
+[Add Odom Factor]: 31 32 
+[Add Adj KPF]: 31 32 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 43601
+[Add Subamp Info]: akeyframe.KeyTime: 286340000000
+[Add Subamp Info]: akeyframe.KeyPose: -17.1286 -14.222 2.58683
+[Add Subamp Info]: passed_dis: 77.8163, keyframes size(): 34
+[Add Odom Factor]: 32 33 
+[Add Adj KPF]: 32 33 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 43698
+[Add Subamp Info]: akeyframe.KeyTime: 287340000000
+[Add Subamp Info]: akeyframe.KeyPose: -18.8875 -11.8608 2.32773
+[Add Subamp Info]: passed_dis: 80.7719, keyframes size(): 35
+[Add Odom Factor]: 33 34 
+[Add Adj KPF]: 33 34 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 45161
+[Add Subamp Info]: akeyframe.KeyTime: 288436000000
+[Add Subamp Info]: akeyframe.KeyPose: -20.3192 -9.78949 2.1508
+[Add Subamp Info]: passed_dis: 83.2961, keyframes size(): 36
+[Add Odom Factor]: 34 35 
+[Add Adj KPF]: 34 35 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 60777
+[Add Subamp Info]: akeyframe.KeyTime: 289736000000
+[Add Subamp Info]: akeyframe.KeyPose: -21.5472 -7.45006 1.86153
+[Add Subamp Info]: passed_dis: 85.9541, keyframes size(): 37
+[Add Odom Factor]: 35 36 
+[Add Adj KPF]: 35 36 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 90016
+[Add Subamp Info]: akeyframe.KeyTime: 291736000000
+[Add Subamp Info]: akeyframe.KeyPose: -21.5827 -4.2992 1.45894
+[Add Subamp Info]: passed_dis: 89.1307, keyframes size(): 38
+[Add Odom Factor]: 36 37 
+[Add Adj KPF]: 36 37 6 6 9
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 92064
+[Add Subamp Info]: akeyframe.KeyTime: 293736000000
+[Add Subamp Info]: akeyframe.KeyPose: -20.6678 -1.64627 1.19967
+[Add Subamp Info]: passed_dis: 91.949, keyframes size(): 39
+[Add Odom Factor]: 37 38 
+[Add Adj KPF]: 37 38 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 99206
+[Add Subamp Info]: akeyframe.KeyTime: 295736000000
+[Add Subamp Info]: akeyframe.KeyPose: -19.9698 1.14704 0.849722
+[Add Subamp Info]: passed_dis: 94.8493, keyframes size(): 40
+[Add Odom Factor]: 38 39 
+[Add Adj KPF]: 38 39 6 6 10
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 89841
+[Add Subamp Info]: akeyframe.KeyTime: 297736000000
+[Add Subamp Info]: akeyframe.KeyPose: -19.7205 4.15856 0.465678
+[Add Subamp Info]: passed_dis: 97.8955, keyframes size(): 41
+[Add Odom Factor]: 39 40 
+Detected LC: -29 39
+targetKeyframeCloud size 83413
+currKeyframeCloud size 99206
+[FPR]: submap pair's pt numbers ratio: 0.815578
+[FPR]: overlap ratio is 0.456324
+[FPR]: need to wait for one more loop closure.
+[Add Adj KPF]: 39 40 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 85224
+[Add Subamp Info]: akeyframe.KeyTime: 299736000000
+[Add Subamp Info]: akeyframe.KeyPose: -18.5932 6.94627 0.0676491
+[Add Subamp Info]: passed_dis: 100.929, keyframes size(): 42
+[Add Odom Factor]: 40 41 
+[Add Adj KPF]: 40 41 6 6 10
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 87989
+[Add Subamp Info]: akeyframe.KeyTime: 301736000000
+[Add Subamp Info]: akeyframe.KeyPose: -17.3007 9.7725 -0.375613
+[Add Subamp Info]: passed_dis: 104.068, keyframes size(): 43
+[Add Odom Factor]: 41 42 
+[Add Adj KPF]: 41 42 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 91176
+[Add Subamp Info]: akeyframe.KeyTime: 303736000000
+[Add Subamp Info]: akeyframe.KeyPose: -17.3794 12.7445 -0.848247
+[Add Subamp Info]: passed_dis: 107.078, keyframes size(): 44
+[Add Odom Factor]: 42 43 
+[Add Adj KPF]: 42 43 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 92604
+[Add Subamp Info]: akeyframe.KeyTime: 305736000000
+[Add Subamp Info]: akeyframe.KeyPose: -16.91 15.651 -1.33465
+[Add Subamp Info]: passed_dis: 110.062, keyframes size(): 45
+[Add Odom Factor]: 43 44 
+[Add Adj KPF]: 43 44 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 69717
+[Add Subamp Info]: akeyframe.KeyTime: 307236000000
+[Add Subamp Info]: akeyframe.KeyPose: -14.657 17.3152 -1.73575
+[Add Subamp Info]: passed_dis: 112.892, keyframes size(): 46
+[Add Odom Factor]: 44 45 
+[Add Adj KPF]: 44 45 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 71958
+[Add Subamp Info]: akeyframe.KeyTime: 308936000000
+[Add Subamp Info]: akeyframe.KeyPose: -11.8954 18.4115 -1.95682
+[Add Subamp Info]: passed_dis: 115.871, keyframes size(): 47
+[Add Odom Factor]: 45 46 
+[Add Adj KPF]: 45 46 6 6 10
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 84066
+[Add Subamp Info]: akeyframe.KeyTime: 311036000000
+[Add Subamp Info]: akeyframe.KeyPose: -8.85939 18.2754 -1.8145
+[Add Subamp Info]: passed_dis: 118.914, keyframes size(): 48
+[Add Odom Factor]: 46 47 
+[Add Adj KPF]: 46 47 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 75404
+[Add Subamp Info]: akeyframe.KeyTime: 313236000000
+[Add Subamp Info]: akeyframe.KeyPose: -6.75352 17.906 -1.85292
+[Add Subamp Info]: passed_dis: 121.052, keyframes size(): 49
+[Add Odom Factor]: 47 48 
+[Add Adj KPF]: 47 48 6 6 10
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 70058
+[Add Subamp Info]: akeyframe.KeyTime: 315236000000
+[Add Subamp Info]: akeyframe.KeyPose: -3.83337 17.9544 -2.03463
+[Add Subamp Info]: passed_dis: 123.978, keyframes size(): 50
+[Add Odom Factor]: 48 49 
+[Add Adj KPF]: 48 49 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 90453
+[Add Subamp Info]: akeyframe.KeyTime: 317136000000
+[Add Subamp Info]: akeyframe.KeyPose: -2.25574 16.1754 -1.72988
+[Add Subamp Info]: passed_dis: 126.375, keyframes size(): 51
+[Add Odom Factor]: 49 50 
+[Add Adj KPF]: 49 50 6 6 12
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 96154
+[Add Subamp Info]: akeyframe.KeyTime: 319044000000
+[Add Subamp Info]: akeyframe.KeyPose: -0.653802 13.8675 -1.57749
+[Add Subamp Info]: passed_dis: 129.189, keyframes size(): 52
+[Add Odom Factor]: 50 51 
+Detected LC: -29 50
+targetKeyframeCloud size 83413
+currKeyframeCloud size 90453
+[FPR]: submap pair's pt numbers ratio: 0.631325
+[FPR]: overlap ratio is 0.112858
+LC KPF queue size is 3 now.
+LC KPF queue front: -29 39LC KPF queue front: -29 50[Add Prior Factor]: prior at 50
+[Add Prior Factor]: prior at 39
+LC KPF queue size is 0 now.
+[Add Adj KPF]: 50 51 6 6 11
+[Optimize]: running isam2 optimization ...
+save pose txt takes 0.365199
+[Optimize]: optimization 1 takes 1.55499ms
+[Optimize]: optimization with lc: ------------29 50
+[Optimize]: optimization avg takes 1.20268ms
+[Optimize]: optimization max takes 1.55499ms
+(0 1=0.573283)(1 2=0.675372)(2 3=0.612654)(3 4=0.103509)(4 5=0.547746)(5 6=0.535502)(6 7=0.643884)(7 8=0.29494)(8 9=0.57697)(9 10=0.337633)(10 11=0.274979)(11 12=0.538877)(12 13=0.821275)(13 14=0.580537)(14 15=0.456875)(15 16=0.51055)(16 17=0.531854)(18 19=0.745133)(19 20=0.619418)(20 21=0.574348)(21 22=0.570358)(22 23=0.415881)(23 24=0.548788)(24 25=0.767017)(25 26=0.787263)(26 27=0.614686)(27 28=0.664903)(28 29=0.607669)(30 31=0.761248)(31 32=0.823834)(32 33=0.654083)(33 34=0.483617)(34 35=0.760912)(35 36=0.559574)(36 37=0.602835)(37 38=0.698433)(38 39=0.606853)(39 40=8.70856)!!!!(40 41=6.94154)!!!!(41 42=6.29535)!!!!(42 43=5.09383)!!!!(43 44=4.31672)!!!!(44 45=3.71869)!!!!(45 46=3.84165)!!!!(46 47=3.81117)!!!!(47 48=3.68145)!!!!(48 49=3.50818)!!!!(49 50=3.30163)!!!!(50 51=0.578527)[FPR]: reject, large residual appear.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 129904
+[Add Subamp Info]: akeyframe.KeyTime: 321640000000
+[Add Subamp Info]: akeyframe.KeyPose: -1.62803 12.2239 -1.35922
+[Add Subamp Info]: passed_dis: 131.112, keyframes size(): 53
+[Add Odom Factor]: 51 52 
+Detected LC: -13 51
+targetKeyframeCloud size 76773
+currKeyframeCloud size 96154
+[FPR]: submap pair's pt numbers ratio: 0.754312
+[FPR]: overlap ratio is 0.172342
+[FPR]: need to wait for one more loop closure.
+Detected LC: -17 52
+targetKeyframeCloud size 67107
+currKeyframeCloud size 129904
+[FPR]: submap pair's pt numbers ratio: 0.321267
+[FPR]: overlap ratio is 0.0930008
+[FPR]: reject, too small overlap.
+[Add Adj KPF]: 51 52 6 6 23
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 61443
+[Add Subamp Info]: akeyframe.KeyTime: 323144000000
+[Add Subamp Info]: akeyframe.KeyPose: -3.26589 11.3843 -1.10528
+[Add Subamp Info]: passed_dis: 132.97, keyframes size(): 54
+[Add Odom Factor]: 52 53 
+[Add Adj KPF]: 52 53 6 6 9
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 38952
+[Add Subamp Info]: akeyframe.KeyTime: 324140000000
+[Add Subamp Info]: akeyframe.KeyPose: -4.35371 11.7352 -1.05975
+[Add Subamp Info]: passed_dis: 134.114, keyframes size(): 55
+[Add Odom Factor]: 53 54 
+Detected LC: -4 53
+targetKeyframeCloud size 45646
+currKeyframeCloud size 61443
+[FPR]: submap pair's pt numbers ratio: 0.481207
+[FPR]: overlap ratio is 0.0790112
+[FPR]: reject, too small overlap.
+[Add Adjacent KPF]: adjacent KP factor absent! False Positive Rejection might not work due to this.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 106895
+[Add Subamp Info]: akeyframe.KeyTime: 326536000000
+[Add Subamp Info]: akeyframe.KeyPose: -4.66453 11.83 -0.996715
+[Add Subamp Info]: passed_dis: 134.445, keyframes size(): 56
+[Add Odom Factor]: 54 55 
+[Add Adj KPF]: 54 55 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 84066
+[Add Subamp Info]: akeyframe.KeyTime: 328436000000
+[Add Subamp Info]: akeyframe.KeyPose: -3.16088 12.2527 -1.08223
+[Add Subamp Info]: passed_dis: 136.009, keyframes size(): 57
+[Add Odom Factor]: 55 56 
+[Add Adj KPF]: 55 56 1 1 1
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 93654
+[Add Subamp Info]: akeyframe.KeyTime: 330440000000
+[Add Subamp Info]: akeyframe.KeyPose: -2.074 12.1335 -1.07575
+[Add Subamp Info]: passed_dis: 137.103, keyframes size(): 58
+[Add Odom Factor]: 56 57 
+Detected LC: -14 56
+targetKeyframeCloud size 81105
+currKeyframeCloud size 84066
+[FPR]: submap pair's pt numbers ratio: 0.594566
+[FPR]: overlap ratio is 0.228387
+LC KPF queue size is 2 now.
+LC KPF queue front: -14 56LC KPF queue front: -14 57Skip.
+LC KPF queue size is 1 now.
+[Add Adj KPF]: 56 57 6 6 9
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 94067
+[Add Subamp Info]: akeyframe.KeyTime: 332436000000
+[Add Subamp Info]: akeyframe.KeyPose: 0.579032 10.886 -1.027
+[Add Subamp Info]: passed_dis: 140.035, keyframes size(): 59
+[Add Odom Factor]: 57 58 
+[Add Adj KPF]: 57 58 6 6 13
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 115648
+[Add Subamp Info]: akeyframe.KeyTime: 334936000000
+[Add Subamp Info]: akeyframe.KeyPose: 1.59521 10.2577 -1.11157
+[Add Subamp Info]: passed_dis: 141.232, keyframes size(): 60
+[Add Odom Factor]: 58 59 
+[Add Adj KPF]: 58 59 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 55365
+[Add Subamp Info]: akeyframe.KeyTime: 336236000000
+[Add Subamp Info]: akeyframe.KeyPose: -0.26062 8.61873 -0.811106
+[Add Subamp Info]: passed_dis: 143.727, keyframes size(): 61
+[Add Odom Factor]: 59 60 
+[Add Adj KPF]: 59 60 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 47542
+[Add Subamp Info]: akeyframe.KeyTime: 337436000000
+[Add Subamp Info]: akeyframe.KeyPose: -2.30233 6.8223 -0.536345
+[Add Subamp Info]: passed_dis: 146.46, keyframes size(): 62
+[Add Odom Factor]: 60 61 
+[Add Adj KPF]: 60 61 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 51368
+[Add Subamp Info]: akeyframe.KeyTime: 338836000000
+[Add Subamp Info]: akeyframe.KeyPose: -3.80687 4.48879 -0.329927
+[Add Subamp Info]: passed_dis: 149.244, keyframes size(): 63
+[Add Odom Factor]: 61 62 
+[Add Adj KPF]: 61 62 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 75333
+[Add Subamp Info]: akeyframe.KeyTime: 340736000000
+[Add Subamp Info]: akeyframe.KeyPose: -5.818 3.71559 0.04002
+[Add Subamp Info]: passed_dis: 151.43, keyframes size(): 64
+[Add Odom Factor]: 62 63 
+[Add Adj KPF]: 62 63 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 94354
+[Add Subamp Info]: akeyframe.KeyTime: 343636000000
+[Add Subamp Info]: akeyframe.KeyPose: -7.05858 4.97646 -0.176594
+[Add Subamp Info]: passed_dis: 153.212, keyframes size(): 65
+[Add Odom Factor]: 63 64 
+[Add Adj KPF]: 63 64 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 80859
+[Add Subamp Info]: akeyframe.KeyTime: 345836000000
+[Add Subamp Info]: akeyframe.KeyPose: -4.88752 4.00596 0.0449106
+[Add Subamp Info]: passed_dis: 155.601, keyframes size(): 66
+[Add Odom Factor]: 64 65 
+[Add Adj KPF]: 64 65 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 59296
+[Add Subamp Info]: akeyframe.KeyTime: 347636000000
+[Add Subamp Info]: akeyframe.KeyPose: -2.53982 5.50808 -0.324582
+[Add Subamp Info]: passed_dis: 158.412, keyframes size(): 67
+[Add Odom Factor]: 65 66 
+[Add Adj KPF]: 65 66 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 65581
+[Add Subamp Info]: akeyframe.KeyTime: 349236000000
+[Add Subamp Info]: akeyframe.KeyPose: -0.470175 7.61994 -0.695059
+[Add Subamp Info]: passed_dis: 161.392, keyframes size(): 68
+[Add Odom Factor]: 66 67 
+[Add Adj KPF]: 66 67 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 62658
+[Add Subamp Info]: akeyframe.KeyTime: 350540000000
+[Add Subamp Info]: akeyframe.KeyPose: 1.66689 9.19827 -1.08912
+[Add Subamp Info]: passed_dis: 164.078, keyframes size(): 69
+[Add Odom Factor]: 67 68 
+[Add Adj KPF]: 67 68 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 75948
+[Add Subamp Info]: akeyframe.KeyTime: 352240000000
+[Add Subamp Info]: akeyframe.KeyPose: 3.84161 10.7519 -1.38632
+[Add Subamp Info]: passed_dis: 166.767, keyframes size(): 70
+[Add Odom Factor]: 68 69 
+[Add Adj KPF]: 68 69 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 79886
+[Add Subamp Info]: akeyframe.KeyTime: 354136000000
+[Add Subamp Info]: akeyframe.KeyPose: 6.77358 10.7773 -1.53275
+[Add Subamp Info]: passed_dis: 169.703, keyframes size(): 71
+[Add Odom Factor]: 69 70 
+[Add Adj KPF]: 69 70 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 73089
+[Add Subamp Info]: akeyframe.KeyTime: 356140000000
+[Add Subamp Info]: akeyframe.KeyPose: 9.57475 9.61538 -1.4527
+[Add Subamp Info]: passed_dis: 172.737, keyframes size(): 72
+[Add Odom Factor]: 70 71 
+[Add Adj KPF]: 70 71 6 6 12
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 80339
+[Add Subamp Info]: akeyframe.KeyTime: 358136000000
+[Add Subamp Info]: akeyframe.KeyPose: 12.4255 9.04762 -1.42493
+[Add Subamp Info]: passed_dis: 175.643, keyframes size(): 73
+[Add Odom Factor]: 71 72 
+[Add Adj KPF]: 71 72 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 65054
+[Add Subamp Info]: akeyframe.KeyTime: 360140000000
+[Add Subamp Info]: akeyframe.KeyPose: 15.349 8.13794 -1.38718
+[Add Subamp Info]: passed_dis: 178.705, keyframes size(): 74
+[Add Odom Factor]: 72 73 
+[Add Adj KPF]: 72 73 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 54937
+[Add Subamp Info]: akeyframe.KeyTime: 361840000000
+[Add Subamp Info]: akeyframe.KeyPose: 17.3265 5.69953 -1.11126
+[Add Subamp Info]: passed_dis: 181.857, keyframes size(): 75
+[Add Odom Factor]: 73 74 
+[Add Adj KPF]: 73 74 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 62241
+[Add Subamp Info]: akeyframe.KeyTime: 363836000000
+[Add Subamp Info]: akeyframe.KeyPose: 17.7667 2.64511 -0.696675
+[Add Subamp Info]: passed_dis: 184.971, keyframes size(): 76
+[Add Odom Factor]: 74 75 
+[Add Adj KPF]: 74 75 6 6 9
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 111894
+[Add Subamp Info]: akeyframe.KeyTime: 366936000000
+[Add Subamp Info]: akeyframe.KeyPose: 17.0981 2.33954 -0.608362
+[Add Subamp Info]: passed_dis: 185.711, keyframes size(): 77
+[Add Odom Factor]: 75 76 
+[Add Adj KPF]: 75 76 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 66750
+[Add Subamp Info]: akeyframe.KeyTime: 368936000000
+[Add Subamp Info]: akeyframe.KeyPose: 16.7819 5.36948 -0.996842
+[Add Subamp Info]: passed_dis: 188.782, keyframes size(): 78
+[Add Odom Factor]: 76 77 
+[Add Adj KPF]: 76 77 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 59461
+[Add Subamp Info]: akeyframe.KeyTime: 370736000000
+[Add Subamp Info]: akeyframe.KeyPose: 15.4604 8.43082 -1.30752
+[Add Subamp Info]: passed_dis: 192.131, keyframes size(): 79
+[Add Odom Factor]: 77 78 
+[Add Adj KPF]: 77 78 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 65135
+[Add Subamp Info]: akeyframe.KeyTime: 372436000000
+[Add Subamp Info]: akeyframe.KeyPose: 13.0215 9.92158 -1.4079
+[Add Subamp Info]: passed_dis: 194.991, keyframes size(): 80
+[Add Odom Factor]: 78 79 
+[Add Adj KPF]: 78 79 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 73054
+[Add Subamp Info]: akeyframe.KeyTime: 374240000000
+[Add Subamp Info]: akeyframe.KeyPose: 11.0748 10.227 -1.36469
+[Add Subamp Info]: passed_dis: 196.962, keyframes size(): 81
+[Add Odom Factor]: 79 80 
+[Add Adj KPF]: 79 80 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 63192
+[Add Subamp Info]: akeyframe.KeyTime: 375740000000
+[Add Subamp Info]: akeyframe.KeyPose: 9.89348 10.1759 -1.2823
+[Add Subamp Info]: passed_dis: 198.147, keyframes size(): 82
+[Add Odom Factor]: 80 81 
+[Add Adj KPF]: 80 81 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 81358
+[Add Subamp Info]: akeyframe.KeyTime: 377736000000
+[Add Subamp Info]: akeyframe.KeyPose: 6.89624 10.7265 -1.26289
+[Add Subamp Info]: passed_dis: 201.195, keyframes size(): 83
+[Add Odom Factor]: 81 82 
+[Add Adj KPF]: 81 82 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 88752
+[Add Subamp Info]: akeyframe.KeyTime: 379736000000
+[Add Subamp Info]: akeyframe.KeyPose: 6.00105 12.5411 -1.44471
+[Add Subamp Info]: passed_dis: 203.226, keyframes size(): 84
+[Add Odom Factor]: 82 83 
+[Add Adj KPF]: 82 83 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 44788
+[Add Subamp Info]: akeyframe.KeyTime: 381136000000
+[Add Subamp Info]: akeyframe.KeyPose: 8.10215 14.5153 -1.84907
+[Add Subamp Info]: passed_dis: 206.138, keyframes size(): 85
+[Add Odom Factor]: 83 84 
+[Add Adj KPF]: 83 84 4 4 4
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 65129
+[Add Subamp Info]: akeyframe.KeyTime: 382936000000
+[Add Subamp Info]: akeyframe.KeyPose: 8.2364 14.1067 -1.92544
+[Add Subamp Info]: passed_dis: 206.575, keyframes size(): 86
+[Add Odom Factor]: 84 85 
+[Add Adj KPF]: 84 85 1 1 1
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 114389
+[Add Subamp Info]: akeyframe.KeyTime: 385836000000
+[Add Subamp Info]: akeyframe.KeyPose: 7.32776 13.3428 -1.69782
+[Add Subamp Info]: passed_dis: 207.783, keyframes size(): 87
+[Add Odom Factor]: 85 86 
+[Add Adjacent KPF]: adjacent KP factor absent! False Positive Rejection might not work due to this.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 147902
+[Add Subamp Info]: akeyframe.KeyTime: 389240000000
+[Add Subamp Info]: akeyframe.KeyPose: 6.61238 11.2532 -1.41518
+[Add Subamp Info]: passed_dis: 210.01, keyframes size(): 88
+[Add Odom Factor]: 86 87 
+[Add Adj KPF]: 86 87 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 104490
+[Add Subamp Info]: akeyframe.KeyTime: 392036000000
+[Add Subamp Info]: akeyframe.KeyPose: 7.80803 9.03274 -1.21284
+[Add Subamp Info]: passed_dis: 212.54, keyframes size(): 89
+[Add Odom Factor]: 87 88 
+[Add Adj KPF]: 87 88 6 6 7
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 79140
+[Add Subamp Info]: akeyframe.KeyTime: 394236000000
+[Add Subamp Info]: akeyframe.KeyPose: 9.14574 7.99022 -1.38096
+[Add Subamp Info]: passed_dis: 214.244, keyframes size(): 90
+[Add Odom Factor]: 88 89 
+[Add Adj KPF]: 88 89 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 100620
+[Add Subamp Info]: akeyframe.KeyTime: 396840000000
+[Add Subamp Info]: akeyframe.KeyPose: 10.8168 6.9551 -0.914153
+[Add Subamp Info]: passed_dis: 216.265, keyframes size(): 91
+[Add Odom Factor]: 89 90 
+[Add Adj KPF]: 89 90 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 98513
+[Add Subamp Info]: akeyframe.KeyTime: 399940000000
+[Add Subamp Info]: akeyframe.KeyPose: 12.753 5.35838 -0.967447
+[Add Subamp Info]: passed_dis: 218.775, keyframes size(): 92
+[Add Odom Factor]: 90 91 
+[Add Adj KPF]: 90 91 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 90153
+[Add Subamp Info]: akeyframe.KeyTime: 403136000000
+[Add Subamp Info]: akeyframe.KeyPose: 13.1055 3.25882 -0.805714
+[Add Subamp Info]: passed_dis: 220.91, keyframes size(): 93
+[Add Odom Factor]: 91 92 
+[Add Adj KPF]: 91 92 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 81392
+[Add Subamp Info]: akeyframe.KeyTime: 406036000000
+[Add Subamp Info]: akeyframe.KeyPose: 12.212 0.955339 -0.196303
+[Add Subamp Info]: passed_dis: 223.455, keyframes size(): 94
+[Add Odom Factor]: 92 93 
+[Add Adj KPF]: 92 93 3 3 3
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 87724
+[Add Subamp Info]: akeyframe.KeyTime: 409136000000
+[Add Subamp Info]: akeyframe.KeyPose: 11.5472 -1.67009 0.244021
+[Add Subamp Info]: passed_dis: 226.199, keyframes size(): 95
+[Add Odom Factor]: 93 94 
+[Add Adj KPF]: 93 94 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 97480
+[Add Subamp Info]: akeyframe.KeyTime: 412136000000
+[Add Subamp Info]: akeyframe.KeyPose: 10.1241 -3.60608 0.475725
+[Add Subamp Info]: passed_dis: 228.612, keyframes size(): 96
+[Add Odom Factor]: 94 95 
+[Add Adj KPF]: 94 95 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 93601
+[Add Subamp Info]: akeyframe.KeyTime: 415040000000
+[Add Subamp Info]: akeyframe.KeyPose: 7.71855 -4.33505 0.532277
+[Add Subamp Info]: passed_dis: 231.127, keyframes size(): 97
+[Add Odom Factor]: 95 96 
+[Add Adj KPF]: 95 96 2 2 2
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 78225
+[Add Subamp Info]: akeyframe.KeyTime: 417836000000
+[Add Subamp Info]: akeyframe.KeyPose: 5.24527 -4.23561 0.537551
+[Add Subamp Info]: passed_dis: 233.602, keyframes size(): 98
+[Add Odom Factor]: 96 97 
+[Add Adj KPF]: 96 97 5 5 5
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 87420
+[Add Subamp Info]: akeyframe.KeyTime: 420836000000
+[Add Subamp Info]: akeyframe.KeyPose: 2.85752 -3.7847 0.532779
+[Add Subamp Info]: passed_dis: 236.032, keyframes size(): 99
+[Add Odom Factor]: 97 98 
+[Add Adjacent KPF]: adjacent KP factor absent! False Positive Rejection might not work due to this.
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 92404
+[Add Subamp Info]: akeyframe.KeyTime: 423436000000
+[Add Subamp Info]: akeyframe.KeyPose: 1.56781 -3.43245 0.550226
+[Add Subamp Info]: passed_dis: 237.369, keyframes size(): 100
+[Add Odom Factor]: 98 99 
+[Add Adj KPF]: 98 99 6 6 6
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 83522
+[Add Subamp Info]: akeyframe.KeyTime: 425636000000
+[Add Subamp Info]: akeyframe.KeyPose: 1.09892 -3.31216 0.569574
+[Add Subamp Info]: passed_dis: 237.853, keyframes size(): 101
+[Add Odom Factor]: 99 100 
+[Add Adj KPF]: 99 100 6 6 11
+------------------------------
+[Add Subamp Info]: akeyframe.KeyCloud: 460498
+[Add Subamp Info]: akeyframe.KeyTime: 437236000000
+[Add Subamp Info]: akeyframe.KeyPose: 1.1291 -3.51036 0.014536
+[Add Subamp Info]: passed_dis: 238.444, keyframes size(): 102
+[Add Odom Factor]: 100 101 
+[Add Adj KPF]: 100 101 6 6 9
+------------------------------
